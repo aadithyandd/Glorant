@@ -39,15 +39,17 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#0c131a');
-scene.fog = new THREE.FogExp2('#0c131a', 0.018);
+scene.background = new THREE.Color('#0b1219');
+scene.fog = new THREE.FogExp2('#0b1219', 0.015);
 
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.rotation.order = 'YXZ';
-camera.position.set(0, 1.6, 20);
 
-// Lighting
-const ambientLight = new THREE.AmbientLight(0xdde6f0, 0.7);
+const EYE_HEIGHT = 1.6;
+camera.position.set(0, EYE_HEIGHT, 15);
+
+// Lights
+const ambientLight = new THREE.AmbientLight(0xdde6f0, 0.65);
 scene.add(ambientLight);
 
 const sunLight = new THREE.DirectionalLight(0xffeedd, 1.1);
@@ -58,73 +60,74 @@ sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
 /* =================================================================
-   3. MAP LOADING (.GLB) & COLLISION SYSTEM
+   3. GROUND RAYCASTING, MAP LOADING & BOUNDARIES
    ================================================================= */
 const colliders = [];
+const groundMeshes = [];
 
-function registerBoxCollider(minX, minY, minZ, maxX, maxY, maxZ) {
-  colliders.push(new THREE.Box3(
-    new THREE.Vector3(minX, minY, minZ),
-    new THREE.Vector3(maxX, maxY, maxZ)
-  ));
-}
-
-// Fallback Arena Floor
+// Fallback Floor
 const fallbackFloor = new THREE.Mesh(
   new THREE.PlaneGeometry(120, 120),
-  new THREE.MeshStandardMaterial({ color: 0x1a2129, roughness: 0.85 })
+  new THREE.MeshStandardMaterial({ color: 0x161e26, roughness: 0.85 })
 );
 fallbackFloor.rotation.x = -Math.PI / 2;
 fallbackFloor.receiveShadow = true;
 scene.add(fallbackFloor);
+groundMeshes.push(fallbackFloor);
 
-// Boundary walls
-registerBoxCollider(-60, 0, -60, 60, 10, -58);
-registerBoxCollider(-60, 0, 58, 60, 10, 60);
-registerBoxCollider(-60, 0, -60, -58, 10, 60);
-registerBoxCollider(58, 0, -60, 60, 10, 60);
+// Boundary limits
+const MAP_BOUND_X = 46;
+const MAP_BOUND_Z = 46;
 
 // Load GLTF / GLB Map
 if (typeof THREE.GLTFLoader !== 'undefined') {
   const loader = new THREE.GLTFLoader();
-  const mapPath = 'lowpoly__fps__tdm__game__map_by_resoforge.glb';
-
   loader.load(
-    mapPath,
+    'lowpoly__fps__tdm__game__map_by_resoforge.glb',
     (gltf) => {
       const map = gltf.scene;
-      map.scale.set(1.5, 1.5, 1.5);
+      map.scale.set(1.4, 1.4, 1.4);
       map.position.set(0, 0, 0);
 
       map.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
+          groundMeshes.push(child);
 
-          // Compute accurate bounding box collision for static geometry
           child.geometry.computeBoundingBox();
           const box = new THREE.Box3();
           box.copy(child.geometry.boundingBox).applyMatrix4(child.matrixWorld);
 
-          // Only register boxes that are obstacles (above ground and not the infinite floor)
-          if (box.max.y > 0.4 && (box.max.x - box.min.x < 50)) {
+          // Walls and obstacles (height > 0.6)
+          if (box.max.y > 0.6 && (box.max.x - box.min.x < 45)) {
             colliders.push(box);
           }
         }
       });
-
       scene.add(map);
-      // Remove fallback floor if map loaded successfully
-      scene.remove(fallbackFloor);
     },
     undefined,
     (err) => {
-      console.warn("Could not load .glb map file locally. Ensure 'lowpoly__fps__tdm__game__map_by_resoforge.glb' is in the root directory.", err);
+      console.warn("Using fallback tactical arena floor.", err);
     }
   );
 }
 
-// First-Person Gun Viewmodel
+// Downward Raycaster for walking on slopes/steps/ground
+const downRay = new THREE.Raycaster();
+const downVector = new THREE.Vector3(0, -1, 0);
+
+function getGroundY(currX, currZ, currY) {
+  downRay.set(new THREE.Vector3(currX, currY + 1.0, currZ), downVector);
+  const hits = downRay.intersectObjects(groundMeshes, true);
+  if (hits.length > 0) {
+    return hits[0].point.y;
+  }
+  return 0; // Fallback ground level
+}
+
+// Gun Viewmodel
 const gunPivot = new THREE.Group();
 camera.add(gunPivot);
 scene.add(camera);
@@ -170,7 +173,7 @@ function updateTracers(dt) {
 }
 
 /* =================================================================
-   5. HIGH-VISIBILITY ENEMY RIG & HEALTH TAG
+   5. ENEMY MODEL & BILLBOARD HEALTH
    ================================================================= */
 function createNameTagSprite(name) {
   const c = document.createElement('canvas');
@@ -178,18 +181,15 @@ function createNameTagSprite(name) {
   c.height = 72;
   const ctx = c.getContext('2d');
 
-  // Background Box
   ctx.fillStyle = 'rgba(15, 25, 35, 0.9)';
   ctx.strokeStyle = '#ff4655';
   ctx.lineWidth = 4;
   ctx.strokeRect(6, 6, 244, 60);
   ctx.fillRect(6, 6, 244, 60);
 
-  // Health Bar Indicator Accent
   ctx.fillStyle = '#ff2233';
   ctx.fillRect(10, 52, 236, 8);
 
-  // Agent Name
   ctx.font = 'bold 24px monospace';
   ctx.fillStyle = '#00ffcc';
   ctx.textAlign = 'center';
@@ -208,7 +208,6 @@ function createHighVisEnemy(name) {
   const modelRoot = new THREE.Group();
   root.add(modelRoot);
 
-  // High-visibility, athletic tactical shaders
   const suitMat = new THREE.MeshStandardMaterial({ color: 0x1a2128, roughness: 0.5 });
   const enemyRedMat = new THREE.MeshStandardMaterial({
     color: 0xff1e38,
@@ -218,24 +217,20 @@ function createHighVisEnemy(name) {
   });
   const glowVisorMat = new THREE.MeshBasicMaterial({ color: 0xff0044 });
 
-  // Chest / Armor Vest
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.65, 0.36), enemyRedMat);
   chest.position.y = 1.15;
   chest.castShadow = true;
   modelRoot.add(chest);
 
-  // Head
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.32, 0.3), suitMat);
   head.position.y = 1.68;
   head.castShadow = true;
   modelRoot.add(head);
 
-  // Glowing Visor
   const visor = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.1, 0.12), glowVisorMat);
   visor.position.set(0, 1.7, 0.16);
   modelRoot.add(visor);
 
-  // Shoulders & Arms
   const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), suitMat);
   lArm.position.set(-0.38, 1.15, 0.1);
   lArm.rotation.x = -Math.PI / 4;
@@ -246,12 +241,10 @@ function createHighVisEnemy(name) {
   rArm.rotation.x = -Math.PI / 4;
   modelRoot.add(rArm);
 
-  // Weapon
   const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.6), suitMat);
   rifle.position.set(0.22, 1.05, 0.38);
   modelRoot.add(rifle);
 
-  // Legs with Red Accent Boots
   const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, 0.24), suitMat);
   lLeg.position.set(-0.17, 0.4, 0);
   lLeg.castShadow = true;
@@ -262,18 +255,26 @@ function createHighVisEnemy(name) {
   rLeg.castShadow = true;
   modelRoot.add(rLeg);
 
-  // High-Vis Billboard Name Tag
   root.add(createNameTagSprite(name || 'ENEMY'));
-
   root.modelRoot = modelRoot;
   root.isDead = false;
   return root;
 }
 
 /* =================================================================
-   6. PLATFORM, INPUT & WASD DETECTION
+   6. SENSITIVITY, PLATFORM & PHYSICS
    ================================================================= */
 let platformMode = 'mobile';
+let userSensitivity = 1.0;
+
+const sensSlider = document.getElementById('sens-slider');
+const sensLabel = document.getElementById('sens-label');
+
+sensSlider.addEventListener('input', (e) => {
+  userSensitivity = parseFloat(e.target.value);
+  sensLabel.innerText = `SENS: ${userSensitivity.toFixed(1)}x`;
+});
+
 const player = {
   id: 'p_' + Math.random().toString(36).substr(2, 9),
   name: 'Agent',
@@ -283,7 +284,9 @@ const player = {
   isReloading: false,
   isDead: false,
   recoilPitch: 0,
-  recoilYaw: 0
+  recoilYaw: 0,
+  vy: 0,
+  isGrounded: true
 };
 
 let currentRoom = null;
@@ -291,7 +294,7 @@ const remotePlayers = {};
 let camYaw = 0;
 let camPitch = 0;
 
-// Platform Selector Toggle
+// Platform Selector
 document.querySelectorAll('.plat-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -301,8 +304,15 @@ document.querySelectorAll('.plat-btn').forEach(btn => {
   });
 });
 
-// Robust WASD State (detects both code and key)
+// PC Keyboard & Spacebar Jump
 const keys = { forward: false, backward: false, left: false, right: false };
+
+function triggerJump() {
+  if (player.isGrounded && !player.isDead) {
+    player.vy = 8.5; // Jump impulse
+    player.isGrounded = false;
+  }
+}
 
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
@@ -311,6 +321,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyA' || k === 'a' || e.code === 'ArrowLeft') keys.left = true;
   if (e.code === 'KeyD' || k === 'd' || e.code === 'ArrowRight') keys.right = true;
   if (e.code === 'KeyR' || k === 'r') triggerReload();
+  if (e.code === 'Space') {
+    e.preventDefault();
+    triggerJump();
+  }
 });
 
 window.addEventListener('keyup', (e) => {
@@ -330,7 +344,7 @@ canvas.addEventListener('click', () => {
 
 window.addEventListener('mousemove', (e) => {
   if (platformMode === 'pc' && document.pointerLockElement === canvas && !player.isDead) {
-    const mouseSens = 0.0024;
+    const mouseSens = 0.0022 * userSensitivity;
     camYaw -= e.movementX * mouseSens;
     camPitch -= e.movementY * mouseSens;
     camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
@@ -355,7 +369,7 @@ const joyStick = document.getElementById('joystick-stick');
 const maxRadius = 45;
 
 window.addEventListener('touchstart', (e) => {
-  if (platformMode === 'pc' || e.target.closest('#lobby') || e.target.closest('#btn-gyro') || e.target.tagName === 'INPUT') return;
+  if (platformMode === 'pc' || e.target.closest('#lobby') || e.target.closest('.sens-container') || e.target.closest('#btn-gyro') || e.target.tagName === 'INPUT') return;
   e.preventDefault();
 
   for (let i = 0; i < e.changedTouches.length; i++) {
@@ -400,8 +414,8 @@ window.addEventListener('touchmove', (e) => {
       const dx = t.clientX - lastLook.x;
       const dy = t.clientY - lastLook.y;
       lastLook = { x: t.clientX, y: t.clientY };
-      camYaw -= dx * 0.004;
-      camPitch -= dy * 0.004;
+      camYaw -= dx * 0.0038 * userSensitivity;
+      camPitch -= dy * 0.0038 * userSensitivity;
       camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
     }
   }
@@ -421,6 +435,12 @@ const endTouches = (e) => {
 };
 window.addEventListener('touchend', endTouches);
 window.addEventListener('touchcancel', endTouches);
+
+// Mobile Jump Button
+document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  triggerJump();
+}, { passive: false });
 
 // Mobile Gyroscope
 let gyroActive = false;
@@ -452,8 +472,8 @@ window.addEventListener('deviceorientation', (e) => {
     const dg = e.gamma - lastGamma;
     const db = e.beta - lastBeta;
     if (Math.abs(dg) < 15 && Math.abs(db) < 15) {
-      camYaw -= (dg * Math.PI / 180) * 0.45;
-      camPitch -= (db * Math.PI / 180) * 0.45;
+      camYaw -= (dg * Math.PI / 180) * 0.45 * userSensitivity;
+      camPitch -= (db * Math.PI / 180) * 0.45 * userSensitivity;
       camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
     }
   }
@@ -461,7 +481,7 @@ window.addEventListener('deviceorientation', (e) => {
   lastBeta = e.beta;
 });
 
-// Collision query against all register boxes
+// AABB Box Collider check
 function checkCollision(targetX, targetZ) {
   const pRadius = 0.45;
   const playerBox = new THREE.Box3(
@@ -475,7 +495,7 @@ function checkCollision(targetX, targetZ) {
 }
 
 /* =================================================================
-   7. DAMAGE, WEAPONS & SHOOTING
+   7. DAMAGE, WEAPONS & FIRING
    ================================================================= */
 const vignetteEl = document.getElementById('damage-vignette');
 const raycaster = new THREE.Raycaster();
@@ -593,6 +613,7 @@ function respawn() {
   player.hp = 100;
   player.isDead = false;
   player.ammo = player.maxAmmo;
+  player.vy = 0;
   hpDisplay.innerText = player.hp;
   ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
   deathScreen.style.display = 'none';
@@ -600,13 +621,18 @@ function respawn() {
   vignetteEl.style.background = 'rgba(255, 0, 30, 0)';
   vignetteEl.style.boxShadow = 'inset 0 0 75px 25px rgba(255, 30, 45, 0)';
 
-  camera.position.set((Math.random() - 0.5) * 20, 1.6, 20 + Math.random() * 5);
+  const spawnX = (Math.random() - 0.5) * 20;
+  const spawnZ = 12 + Math.random() * 5;
+  const groundY = getGroundY(spawnX, spawnZ, 5);
+
+  camera.position.set(spawnX, groundY + EYE_HEIGHT, spawnZ);
 
   if (currentRoom) {
     update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
       hp: 100,
       isDead: false,
       x: camera.position.x,
+      y: camera.position.y,
       z: camera.position.z
     });
   }
@@ -624,11 +650,14 @@ function joinRoom(roomId, name) {
     document.getElementById('btn-gyro').style.display = 'none';
   }
 
+  const initialGroundY = getGroundY(camera.position.x, camera.position.z, 5);
+  camera.position.y = initialGroundY + EYE_HEIGHT;
+
   const playerRef = ref(db, `rooms/${roomId}/players/${player.id}`);
   set(playerRef, {
     name: player.name,
     x: camera.position.x,
-    y: 1.6,
+    y: camera.position.y,
     z: camera.position.z,
     yaw: 0,
     hp: 100,
@@ -648,7 +677,7 @@ function joinRoom(roomId, name) {
         remotePlayers[id] = mesh;
       }
       const pMesh = remotePlayers[id];
-      pMesh.position.lerp(new THREE.Vector3(data.x, 0, data.z), 0.35);
+      pMesh.position.lerp(new THREE.Vector3(data.x, data.y - EYE_HEIGHT, data.z), 0.35);
       pMesh.rotation.y = data.yaw;
 
       pMesh.isDead = !!data.isDead;
@@ -704,11 +733,12 @@ document.getElementById('btn-join').addEventListener('touchend', handleJoin, { p
 document.getElementById('btn-join').addEventListener('click', handleJoin);
 
 /* =================================================================
-   9. GAME ENGINE LOOP & WASD PHYSICS
+   9. MAIN ENGINE LOOP & PHYSICS
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
 const moveSpeed = 8.5;
+const GRAVITY = 24.0;
 
 function animate(time) {
   requestAnimationFrame(animate);
@@ -726,7 +756,7 @@ function animate(time) {
   camera.rotation.y = camYaw + player.recoilYaw;
   camera.rotation.x = camPitch + player.recoilPitch;
 
-  // Resolve Inputs
+  // Horizontal Inputs
   let inputX = 0;
   let inputZ = 0;
 
@@ -740,7 +770,7 @@ function animate(time) {
     inputZ = joyInput.y;
   }
 
-  // Calculate Movement with Collision
+  // Horizontal Movement & Bounding Clamping
   if (!player.isDead && (Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05)) {
     const sinY = Math.sin(camYaw);
     const cosY = Math.cos(camYaw);
@@ -753,11 +783,32 @@ function animate(time) {
     const deltaX = (fwdX + strafeX) * moveSpeed * dt;
     const deltaZ = (fwdZ + strafeZ) * moveSpeed * dt;
 
-    if (!checkCollision(camera.position.x + deltaX, camera.position.z)) {
-      camera.position.x += deltaX;
+    const nextX = THREE.MathUtils.clamp(camera.position.x + deltaX, -MAP_BOUND_X, MAP_BOUND_X);
+    const nextZ = THREE.MathUtils.clamp(camera.position.z + deltaZ, -MAP_BOUND_Z, MAP_BOUND_Z);
+
+    if (!checkCollision(nextX, camera.position.z)) {
+      camera.position.x = nextX;
     }
-    if (!checkCollision(camera.position.x, camera.position.z + deltaZ)) {
-      camera.position.z += deltaZ;
+    if (!checkCollision(camera.position.x, nextZ)) {
+      camera.position.z = nextZ;
+    }
+  }
+
+  // Vertical Gravity & Ground Snapping
+  if (!player.isDead) {
+    const floorY = getGroundY(camera.position.x, camera.position.z, camera.position.y - EYE_HEIGHT);
+    const standingEyeY = floorY + EYE_HEIGHT;
+
+    player.vy -= GRAVITY * dt;
+    camera.position.y += player.vy * dt;
+
+    // Check Ground Collision
+    if (camera.position.y <= standingEyeY) {
+      camera.position.y = standingEyeY;
+      player.vy = 0;
+      player.isGrounded = true;
+    } else {
+      player.isGrounded = false;
     }
   }
 
@@ -766,6 +817,7 @@ function animate(time) {
     lastNetworkSync = time;
     update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
       x: camera.position.x,
+      y: camera.position.y,
       z: camera.position.z,
       yaw: camYaw
     });
