@@ -54,7 +54,6 @@
         <input type="range" id="sens-slider" min="0.4" max="3.0" step="0.1" value="1.0" />
       </div>
 
-      <!-- Scoreboard Button for Mobile / Status for PC -->
       <button id="btn-tab-toggle" class="hud-pill">[T] SCORES</button>
       <button id="btn-gyro" class="hud-pill">GYRO: OFF</button>
       
@@ -77,6 +76,8 @@
 
     <div class="bottom-hud">
       <div class="stat-box">HP <span id="hp-val" class="hp-val">100</span></div>
+      <!-- Dash Cooldown Indicator -->
+      <div class="stat-box">DASH <span id="dash-val" class="dash-val">READY [E]</span></div>
       <div class="stat-box">AMMO <span id="ammo-val" class="ammo-val">25/25</span></div>
     </div>
   </div>
@@ -90,6 +91,7 @@
     <button id="btn-fire" class="action-btn">FIRE</button>
     <button id="btn-reload" class="action-btn">R</button>
     <button id="btn-jump" class="action-btn">JUMP</button>
+    <button id="btn-dash" class="action-btn">DASH</button>
   </div>
 
   <script type="module" src="app.js"></script>
