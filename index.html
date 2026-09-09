@@ -6,6 +6,7 @@
   <title>V-STRIKE 3D</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
 
@@ -13,7 +14,7 @@
   <div id="damage-vignette"></div>
   <div id="scope-overlay"></div>
 
-  <!-- Valorant Tactical Kill Banner -->
+  <!-- Valorant Kill Banner -->
   <div id="kill-banner">
     <div class="kill-skull">&#9760;</div>
     <div class="kill-text" id="kill-banner-text">KILL</div>
@@ -44,21 +45,29 @@
       <input type="text" id="player-name" placeholder="Agent Name" maxlength="10" />
       <input type="text" id="room-input" placeholder="Room Code (e.g. BIND)" maxlength="6" />
       
+      <!-- Mode Selection -->
+      <div class="platform-toggle">
+        <button type="button" class="mode-btn active" data-mode="online">ONLINE MULTIPLAYER</button>
+        <button type="button" class="mode-btn" data-mode="offline">OFFLINE (BOTS)</button>
+      </div>
+
+      <!-- Platform Selection -->
       <div class="platform-toggle">
         <button type="button" class="plat-btn active" data-plat="mobile">MOBILE</button>
         <button type="button" class="plat-btn" data-plat="pc">PC (WASD)</button>
       </div>
 
-      <button class="btn" id="btn-join">Join Match</button>
+      <button class="btn" id="btn-join">Start Game</button>
     </div>
   </div>
 
   <!-- In-game HUD -->
   <div id="hud">
     <div class="top-bar">
+      <!-- Sensitivity Slider down to 0.1 -->
       <div class="sens-container">
-        <span id="sens-label">SENS: 1.0x</span>
-        <input type="range" id="sens-slider" min="0.4" max="3.0" step="0.1" value="1.0" />
+        <span id="sens-label">SENS: 1.00x</span>
+        <input type="range" id="sens-slider" min="0.1" max="3.0" step="0.05" value="1.0" />
       </div>
 
       <button id="btn-swap-weapon" class="hud-pill">WEAPON: RIFLE</button>
@@ -68,7 +77,6 @@
       <div id="killfeed"></div>
     </div>
 
-    <!-- Crosshair -->
     <div id="crosshair">
       <div class="ch-line ch-t"></div>
       <div class="ch-line ch-b"></div>
