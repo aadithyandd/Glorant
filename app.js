@@ -61,43 +61,106 @@ sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
 /* =================================================================
-   3. FIRST-PERSON GUN VIEWMODEL
+   3. WEAPON RIGS (RIFLE & TACTICAL KNIFE)
    ================================================================= */
 const gunPivot = new THREE.Group();
 gunPivot.frustumCulled = false;
 camera.add(gunPivot);
 
+// RIFLE MODEL
+const rifleGroup = new THREE.Group();
 const gunMat = new THREE.MeshLambertMaterial({ color: 0x22262c });
 const gunBarrelMat = new THREE.MeshLambertMaterial({ color: 0x111316 });
 const gunAccentMat = new THREE.MeshLambertMaterial({ color: 0xff4655 });
 
 const rifleBody = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.55), gunMat);
 rifleBody.position.set(0.2, -0.22, -0.5);
-rifleBody.frustumCulled = false;
-gunPivot.add(rifleBody);
+rifleGroup.add(rifleBody);
 
 const rifleBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8), gunBarrelMat);
 rifleBarrel.rotation.x = -Math.PI / 2;
 rifleBarrel.position.set(0.2, -0.2, -0.85);
-rifleBarrel.frustumCulled = false;
-gunPivot.add(rifleBarrel);
+rifleGroup.add(rifleBarrel);
 
 const rifleMag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.1), gunAccentMat);
 rifleMag.position.set(0.2, -0.32, -0.45);
 rifleMag.rotation.x = Math.PI / 8;
-rifleMag.frustumCulled = false;
-gunPivot.add(rifleMag);
+rifleGroup.add(rifleMag);
 
 const flashMat = new THREE.MeshBasicMaterial({ color: 0xffea00, visible: false });
 const muzzleFlash = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), flashMat);
 muzzleFlash.position.set(0.2, -0.2, -1.05);
-muzzleFlash.frustumCulled = false;
-gunPivot.add(muzzleFlash);
+rifleGroup.add(muzzleFlash);
+gunPivot.add(rifleGroup);
+
+// TACTICAL KNIFE MODEL
+const knifeGroup = new THREE.Group();
+const bladeMat = new THREE.MeshStandardMaterial({ color: 0xdde6ed, metalness: 0.9, roughness: 0.2 });
+const handleMat = new THREE.MeshLambertMaterial({ color: 0x1a2128 });
+const guardMat = new THREE.MeshLambertMaterial({ color: 0xff4655 });
+
+const blade = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.08, 0.3), bladeMat);
+blade.position.set(0.18, -0.16, -0.5);
+knifeGroup.add(blade);
+
+const guard = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.03), guardMat);
+guard.position.set(0.18, -0.16, -0.34);
+knifeGroup.add(guard);
+
+const handle = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.06, 0.16), handleMat);
+handle.position.set(0.18, -0.16, -0.24);
+knifeGroup.add(handle);
+
+knifeGroup.visible = false;
+gunPivot.add(knifeGroup);
+
+// Weapons state
+let currentWeapon = 'rifle'; // 'rifle' or 'knife'
+const slotDisplay = document.getElementById('slot-val');
+const btnSwapWeapon = document.getElementById('btn-swap-weapon');
+
+function setWeapon(type) {
+  if (player.isReloading || player.isDead || currentWeapon === type) return;
+  currentWeapon = type;
+
+  // Draw animation
+  gunPivot.position.y = -0.35;
+  setTimeout(() => { gunPivot.position.y = 0; }, 160);
+
+  if (type === 'rifle') {
+    rifleGroup.visible = true;
+    knifeGroup.visible = false;
+    slotDisplay.innerText = 'RIFLE';
+    btnSwapWeapon.innerText = 'WEAPON: RIFLE';
+    ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
+  } else {
+    rifleGroup.visible = false;
+    knifeGroup.visible = true;
+    slotDisplay.innerText = 'KNIFE';
+    btnSwapWeapon.innerText = 'WEAPON: KNIFE';
+    ammoDisplay.innerText = 'MELEE';
+  }
+}
+
+function toggleWeapon() {
+  setWeapon(currentWeapon === 'rifle' ? 'knife' : 'rifle');
+}
+
+btnSwapWeapon.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleWeapon();
+});
+
+// PC Mouse Wheel & 1/2 number keys
+window.addEventListener('wheel', (e) => {
+  if (platformMode === 'pc') toggleWeapon();
+}, { passive: true });
 
 /* =================================================================
-   4. PROCEDURAL OPEN-WORLD ARENA (BOXES & OBSTACLES)
+   4. OPEN-WORLD ARENA & SOLID WALL COLLIDERS
    ================================================================= */
 const colliders = [];
+const obstacleMeshes = [];
 const MAP_SIZE = 300;
 const MAP_BOUND = MAP_SIZE / 2 - 6;
 
@@ -138,6 +201,7 @@ function createPerimeterWall(w, h, d, x, z) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
   m.position.set(x, h / 2, z);
   scene.add(m);
+  obstacleMeshes.push(m);
   registerBoxCollider(x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2);
 }
 createPerimeterWall(MAP_SIZE, 14, 4, 0, -MAP_SIZE / 2);
@@ -159,22 +223,26 @@ function spawnObstacleBox(type, x, z) {
     m.position.y = 1.6;
     m.castShadow = m.receiveShadow = true;
     g.add(m);
+    obstacleMeshes.push(m);
     registerBoxCollider(x - 2.25, 0, z - 4.5, x + 2.25, 3.2, z + 4.5);
   } else if (type === 1) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(7, 4, 7), boxMats[3]);
     m.position.y = 2;
     m.castShadow = m.receiveShadow = true;
     g.add(m);
+    obstacleMeshes.push(m);
 
     const roof = new THREE.Mesh(new THREE.BoxGeometry(8, 0.4, 8), boxMats[0]);
     roof.position.y = 4.2;
     g.add(roof);
+    obstacleMeshes.push(roof);
     registerBoxCollider(x - 3.5, 0, z - 3.5, x + 3.5, 4.4, z + 3.5);
   } else {
     const m = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.2, 3.2), boxMats[3]);
     m.position.y = 1.1;
     m.castShadow = m.receiveShadow = true;
     g.add(m);
+    obstacleMeshes.push(m);
     registerBoxCollider(x - 1.6, 0, z - 1.6, x + 1.6, 2.2, z + 1.6);
   }
 
@@ -225,7 +293,7 @@ function updateTracers(dt) {
 }
 
 /* =================================================================
-   6. REAL ENEMY AVATARS & NAME TAGS
+   6. ENEMY MODEL RIG & BILLBOARD NAME TAGS
    ================================================================= */
 function createNameTagSprite(name) {
   const c = document.createElement('canvas');
@@ -252,6 +320,7 @@ function createNameTagSprite(name) {
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
   sprite.scale.set(1.6, 0.45, 1);
   sprite.position.y = 2.45;
+  sprite.visible = false; // Visibility controlled by line-of-sight check
   return sprite;
 }
 
@@ -302,14 +371,17 @@ function createHighVisEnemy(name) {
   rLeg.castShadow = true;
   modelRoot.add(rLeg);
 
-  root.add(createNameTagSprite(name || 'ENEMY'));
+  const nameSprite = createNameTagSprite(name || 'ENEMY');
+  root.add(nameSprite);
+  root.nameSprite = nameSprite;
+
   root.modelRoot = modelRoot;
   root.isDead = false;
   return root;
 }
 
 /* =================================================================
-   7. INPUTS, DASH ABILITY & "T" SCOREBOARD
+   7. INPUTS, DASH, SCOREBOARD & LINE-OF-SIGHT
    ================================================================= */
 let platformMode = 'mobile';
 let userSensitivity = 1.0;
@@ -321,12 +393,22 @@ sensSlider.addEventListener('input', (e) => {
   sensLabel.innerText = `SENS: ${userSensitivity.toFixed(1)}x`;
 });
 
-const DASH_COOLDOWN = 1000; // 10 seconds
+const DASH_COOLDOWN = 10000;
 let lastDashTime = 0;
 let dashVelocity = { x: 0, z: 0 };
 let dashDuration = 0;
 
 const dashDisplay = document.getElementById('dash-val');
+const killBanner = document.getElementById('kill-banner');
+let killBannerTimeout = null;
+
+function triggerKillBanner() {
+  killBanner.classList.add('show');
+  clearTimeout(killBannerTimeout);
+  killBannerTimeout = setTimeout(() => {
+    killBanner.classList.remove('show');
+  }, 1600);
+}
 
 const player = {
   id: 'p_' + Math.random().toString(36).substr(2, 9),
@@ -358,9 +440,8 @@ function triggerDash() {
   if (player.isDead || now - lastDashTime < DASH_COOLDOWN) return;
 
   lastDashTime = now;
-  dashDuration = 0.18; // 180ms burst
+  dashDuration = 0.18;
 
-  // Dash in facing direction or joystick vector
   const sinY = Math.sin(camYaw);
   const cosY = Math.cos(camYaw);
   const dashSpeed = 34.0;
@@ -368,7 +449,6 @@ function triggerDash() {
   dashVelocity.x = -sinY * dashSpeed;
   dashVelocity.z = -cosY * dashSpeed;
 
-  // Visual recoil forward
   camera.fov = 82;
   camera.updateProjectionMatrix();
   setTimeout(() => {
@@ -385,6 +465,31 @@ function updateDashCooldownUI(now) {
   } else {
     dashDisplay.innerText = platformMode === 'pc' ? 'READY [E]' : 'READY';
     dashDisplay.classList.remove('cooldown');
+  }
+}
+
+// Line-of-sight Raycaster to check if walls block name tags
+const losRay = new THREE.Raycaster();
+function updatePlayerVisibilities() {
+  const eyePos = camera.position;
+  for (let id in remotePlayers) {
+    const pMesh = remotePlayers[id];
+    if (pMesh.isDead) {
+      pMesh.nameSprite.visible = false;
+      continue;
+    }
+
+    // Target head level
+    const targetHead = pMesh.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+    const distToTarget = eyePos.distanceTo(targetHead);
+    const dir = targetHead.clone().sub(eyePos).normalize();
+
+    losRay.set(eyePos, dir);
+    losRay.far = distToTarget;
+
+    const wallIntersects = losRay.intersectObjects(obstacleMeshes, true);
+    // If a wall is closer than the enemy, hide their name tag
+    pMesh.nameSprite.visible = wallIntersects.length === 0;
   }
 }
 
@@ -429,7 +534,7 @@ document.getElementById('btn-tab-toggle').addEventListener('click', (e) => {
   toggleScoreboard();
 });
 
-// PC Keyboard Controls
+// PC Keyboard
 const keys = { forward: false, backward: false, left: false, right: false };
 
 function triggerJump() {
@@ -448,7 +553,10 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Dash with E or Shift
+  // Number keys for weapon slots
+  if (e.key === '1') setWeapon('rifle');
+  if (e.key === '2') setWeapon('knife');
+
   if (k === 'e' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
     e.preventDefault();
     triggerDash();
@@ -474,7 +582,6 @@ window.addEventListener('keyup', (e) => {
   if (e.code === 'KeyD' || k === 'd' || e.code === 'ArrowRight') keys.right = false;
 });
 
-// PC Mouse
 canvas.addEventListener('click', () => {
   if (platformMode === 'pc' && document.getElementById('lobby').style.display === 'none') {
     canvas.requestPointerLock();
@@ -508,13 +615,13 @@ const joyStick = document.getElementById('joystick-stick');
 const maxRadius = 45;
 
 window.addEventListener('touchstart', (e) => {
-  if (platformMode === 'pc' || e.target.closest('#lobby') || e.target.closest('#scoreboard-modal') || e.target.closest('.sens-container') || e.target.closest('#btn-gyro') || e.target.closest('#btn-tab-toggle') || e.target.tagName === 'INPUT') return;
+  if (platformMode === 'pc' || e.target.closest('#lobby') || e.target.closest('#scoreboard-modal') || e.target.closest('.sens-container') || e.target.closest('#btn-gyro') || e.target.closest('#btn-tab-toggle') || e.target.closest('#btn-swap-weapon') || e.target.tagName === 'INPUT') return;
   e.preventDefault();
 
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
     const el = document.elementFromPoint(t.clientX, t.clientY);
-    if (el && (el.classList.contains('action-btn') || el.id === 'btn-gyro' || el.id === 'btn-tab-toggle')) continue;
+    if (el && (el.classList.contains('action-btn') || el.id === 'btn-gyro' || el.id === 'btn-tab-toggle' || el.id === 'btn-swap-weapon')) continue;
 
     if (t.clientX < window.innerWidth / 2 && t.clientY > 60 && joyTouchId === null) {
       joyTouchId = t.identifier;
@@ -585,7 +692,7 @@ document.getElementById('btn-dash').addEventListener('touchstart', (e) => {
   triggerDash();
 }, { passive: false });
 
-// Gyroscope
+// Mobile Gyroscope
 let gyroActive = false;
 let lastGamma = null;
 let lastBeta = null;
@@ -637,7 +744,7 @@ function checkCollision(targetX, targetZ) {
 }
 
 /* =================================================================
-   8. SHOOTING & HITSCAN
+   8. ATTACK SYSTEM (NO WALLBANG HITSCAN & MELEE)
    ================================================================= */
 const vignetteEl = document.getElementById('damage-vignette');
 const raycaster = new THREE.Raycaster();
@@ -656,6 +763,40 @@ function triggerDamageScreen() {
 
 function triggerFire() {
   if (player.isReloading || player.isDead) return;
+
+  if (currentWeapon === 'knife') {
+    // KNIFE MELEE ATTACK
+    knifeGroup.rotation.y = -Math.PI / 3;
+    gunPivot.position.z += 0.08;
+    setTimeout(() => {
+      knifeGroup.rotation.y = 0;
+      gunPivot.position.z = 0;
+    }, 180);
+
+    // Knife range check (up to 3.2m in front)
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    const activeTargets = Object.values(remotePlayers).filter(m => !m.isDead);
+    const hits = raycaster.intersectObjects(activeTargets, true);
+
+    if (hits.length > 0 && hits[0].distance <= 3.2) {
+      // Check for wall obstruction between knife and target
+      const wallHits = raycaster.intersectObjects(obstacleMeshes, true);
+      if (wallHits.length === 0 || wallHits[0].distance > hits[0].distance) {
+        const hitObj = hits[0].object;
+        let targetId = null;
+        for (let id in remotePlayers) {
+          if (remotePlayers[id].getObjectById(hitObj.id)) targetId = id;
+        }
+        if (targetId && currentRoom) {
+          const damageRef = ref(db, `rooms/${currentRoom}/players/${targetId}/damage`);
+          push(damageRef, { fromId: player.id, fromName: player.name, amount: 65, time: Date.now() });
+        }
+      }
+    }
+    return;
+  }
+
+  // RIFLE SHOOTING
   if (player.ammo <= 0) {
     triggerReload();
     return;
@@ -675,14 +816,22 @@ function triggerFire() {
   muzzleFlash.getWorldPosition(muzzleWorld);
 
   raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+  // Check both opponents and walls (NO WALLBANG)
   const activeTargets = Object.values(remotePlayers).filter(m => !m.isDead);
-  const hits = raycaster.intersectObjects(activeTargets, true);
+  const playerHits = raycaster.intersectObjects(activeTargets, true);
+  const wallHits = raycaster.intersectObjects(obstacleMeshes, true);
 
   let endPoint = new THREE.Vector3();
+  let firstWallDist = wallHits.length > 0 ? wallHits[0].distance : Infinity;
+  let firstPlayerDist = playerHits.length > 0 ? playerHits[0].distance : Infinity;
 
-  if (hits.length > 0) {
-    endPoint.copy(hits[0].point);
-    const hitObj = hits[0].object;
+  // If a wall is in front of the player, hit the wall and stop (no damage)
+  if (firstWallDist < firstPlayerDist) {
+    endPoint.copy(wallHits[0].point);
+  } else if (playerHits.length > 0) {
+    endPoint.copy(playerHits[0].point);
+    const hitObj = playerHits[0].object;
     let targetId = null;
     for (let id in remotePlayers) {
       if (remotePlayers[id].getObjectById(hitObj.id)) targetId = id;
@@ -699,7 +848,7 @@ function triggerFire() {
 }
 
 function triggerReload() {
-  if (player.isReloading || player.ammo === player.maxAmmo || player.isDead) return;
+  if (currentWeapon === 'knife' || player.isReloading || player.ammo === player.maxAmmo || player.isDead) return;
   player.isReloading = true;
   ammoDisplay.innerText = `RELOAD...`;
   gunPivot.position.y = -0.22;
@@ -722,7 +871,7 @@ document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 /* =================================================================
-   9. MULTIPLAYER ROOMS, PURGING OLD GHOSTS & STATS
+   9. MULTIPLAYER ROOMS, SCORES & KILL FEED
    ================================================================= */
 const deathScreen = document.getElementById('death-screen');
 const respawnText = document.getElementById('respawn-text');
@@ -782,7 +931,7 @@ function respawn() {
   player.ammo = player.maxAmmo;
   player.vy = 0;
   hpDisplay.innerText = player.hp;
-  ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
+  if (currentWeapon === 'rifle') ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
   deathScreen.style.display = 'none';
 
   vignetteEl.style.background = 'rgba(255, 0, 30, 0)';
@@ -816,7 +965,6 @@ async function joinRoom(roomId, name) {
     document.getElementById('btn-gyro').style.display = 'none';
   }
 
-  // PURGE OLD GHOST PLAYERS: Remove any player from DB who hasn't updated in 25s
   try {
     const existingSnap = await get(ref(db, `rooms/${roomId}/players`));
     if (existingSnap.exists()) {
@@ -853,8 +1001,11 @@ async function joinRoom(roomId, name) {
     const list = snap.val() || {};
     allLobbyScores = list;
 
+    // Trigger Kill Banner if our kills incremented
     if (list[player.id]) {
-      player.kills = list[player.id].kills || 0;
+      const newKills = list[player.id].kills || 0;
+      if (newKills > player.kills) triggerKillBanner();
+      player.kills = newKills;
       player.deaths = list[player.id].deaths || 0;
       player.assists = list[player.id].assists || 0;
     }
@@ -944,8 +1095,9 @@ function animate(time) {
 
   updateTracers(dt);
   updateDashCooldownUI(time);
+  updatePlayerVisibilities();
 
-  // Recoil recovery
+  // Recoil decay
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
   gunPivot.position.z = THREE.MathUtils.lerp(gunPivot.position.z, 0, 0.2);
@@ -967,7 +1119,7 @@ function animate(time) {
     inputZ = joyInput.y;
   }
 
-  // Handle Dash Movement
+  // Dash or Walk
   if (dashDuration > 0) {
     dashDuration -= dt;
     const dX = THREE.MathUtils.clamp(camera.position.x + dashVelocity.x * dt, -MAP_BOUND, MAP_BOUND);
@@ -976,7 +1128,6 @@ function animate(time) {
     if (!checkCollision(dX, camera.position.z)) camera.position.x = dX;
     if (!checkCollision(camera.position.x, dZ)) camera.position.z = dZ;
   } else if (!player.isDead && (Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05)) {
-    // Normal Movement
     const sinY = Math.sin(camYaw);
     const cosY = Math.cos(camYaw);
 
@@ -1013,7 +1164,7 @@ function animate(time) {
     }
   }
 
-  // Network Sync with heartbeat timestamp
+  // Network Sync (20 updates/sec)
   if (currentRoom && time - lastNetworkSync > 50) {
     lastNetworkSync = time;
     update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
