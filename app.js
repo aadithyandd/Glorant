@@ -300,7 +300,7 @@ muzzleFlash.frustumCulled = false;
 rifleGroup.add(muzzleFlash);
 gunPivot.add(rifleGroup);
 
-// REPOSITIONED & FLIPPED KARAMBIT RIG (NORTH TO SOUTH)
+// REPOSITIONED & FLIPPED KARAMBIT RIG
 const karambitHolder = new THREE.Group();
 karambitHolder.position.set(0.23, -0.21, -0.45);
 karambitHolder.rotation.set(0.1, -0.15, -0.05);
@@ -315,7 +315,6 @@ karambitHolder.add(fistMesh);
 const bladeContainer = new THREE.Group();
 karambitHolder.add(bladeContainer);
 
-// Procedural fallback blade
 const ringHandle = new THREE.Mesh(
   new THREE.TorusGeometry(0.065, 0.016, 8, 24),
   new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.85, roughness: 0.2 })
@@ -336,7 +335,6 @@ bladeBody.rotation.set(Math.PI / 2, 0, Math.PI * 0.7);
 bladeBody.position.set(-0.02, 0.08, -0.15);
 bladeContainer.add(bladeBody);
 
-// Load reaver_karambit.glb
 if (typeof THREE.GLTFLoader !== 'undefined') {
   const kLoader = new THREE.GLTFLoader();
   kLoader.load(
@@ -557,7 +555,7 @@ function updateTracers(dt) {
 }
 
 /* =================================================================
-   7. ENEMY MODEL RIG (EYELESS SILHOUETTE)
+   7. ENEMY MODEL RIG (CORRECTED FORWARD-FACING ALIGNMENT)
    ================================================================= */
 function createNameTagSprite(name) {
   const c = document.createElement('canvas');
@@ -604,29 +602,29 @@ function createHighVisEnemy(name) {
   chest.hitZone = 'body';
   modelRoot.add(chest);
 
-  // Head without eyes/visor
+  // Head without visor
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.35, 0.32), suitMat);
   head.position.y = 1.68;
   head.castShadow = true;
   head.hitZone = 'head';
   modelRoot.add(head);
 
-  // Arms
+  // Arms angled forward (-Z)
   const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), suitMat);
-  lArm.position.set(-0.35, 1.15, 0.15);
-  lArm.rotation.x = -Math.PI / 3;
+  lArm.position.set(-0.35, 1.15, -0.15);
+  lArm.rotation.x = Math.PI / 3;
   lArm.hitZone = 'body';
   modelRoot.add(lArm);
 
   const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), suitMat);
-  rArm.position.set(0.35, 1.15, 0.15);
-  rArm.rotation.x = -Math.PI / 3;
+  rArm.position.set(0.35, 1.15, -0.15);
+  rArm.rotation.x = Math.PI / 3;
   rArm.hitZone = 'body';
   modelRoot.add(rArm);
 
-  // Rifle indicating facing orientation
+  // Rifle extended forward in facing direction (-Z)
   const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.8), gunBarrelMat);
-  rifle.position.set(0.18, 1.1, 0.5);
+  rifle.position.set(0.18, 1.1, -0.5);
   rifle.hitZone = 'body';
   modelRoot.add(rifle);
 
@@ -687,7 +685,8 @@ function measurePing() {
 }
 setInterval(measurePing, 2500);
 
-const DASH_COOLDOWN = 10000;
+// REDUCED DASH COOLDOWN: 1000ms (1 second)
+const DASH_COOLDOWN = 1000;
 let lastDashTime = 0;
 let dashVelocity = { x: 0, z: 0 };
 let dashDuration = 0;
@@ -782,7 +781,7 @@ function updateOfflineBots(dt) {
       const speed = 2.5 + Math.random() * 2.5;
       bot.vx = Math.cos(moveAngle) * speed;
       bot.vz = Math.sin(moveAngle) * speed;
-      bot.yaw = -moveAngle + Math.PI / 2;
+      bot.yaw = Math.atan2(-bot.vx, -bot.vz);
     }
 
     const nextX = THREE.MathUtils.clamp(bot.x + bot.vx * dt, -MAP_BOUND, MAP_BOUND);
@@ -836,13 +835,68 @@ function triggerDash() {
 }
 
 function updateDashCooldownUI(now) {
-  const remaining = Math.max(0, Math.ceil((DASH_COOLDOWN - (now - lastDashTime)) / 1000));
+  const remaining = Math.max(0, ((DASH_COOLDOWN - (now - lastDashTime)) / 1000).toFixed(1));
   if (remaining > 0) {
     dashDisplay.innerText = `${remaining}s`;
     dashDisplay.classList.add('cooldown');
   } else {
     dashDisplay.innerText = platformMode === 'pc' ? 'READY [E]' : 'READY';
     dashDisplay.classList.remove('cooldown');
+  }
+}
+
+/* =================================================================
+   8.1. MOBILE SLIGHT LOCK-ON AIM ASSIST
+   ================================================================= */
+const aimAssistRay = new THREE.Raycaster();
+function applyMobileAimAssist(dt) {
+  if (platformMode !== 'mobile' || player.isDead) return;
+
+  const targetPool = gameMode === 'offline' ? offlineBots.map(b => b.mesh) : Object.values(remotePlayers);
+  const forwardDir = new THREE.Vector3();
+  camera.getWorldDirection(forwardDir);
+  const eyePos = camera.position;
+
+  let bestTarget = null;
+  let minAngle = 0.32; // ~18-degree subtle assist cone
+
+  for (let pMesh of targetPool) {
+    if (pMesh.isDead) continue;
+
+    const chestPos = pMesh.position.clone().add(new THREE.Vector3(0, 1.45, 0));
+    const toTarget = chestPos.clone().sub(eyePos);
+    const dist = toTarget.length();
+    if (dist > 50 || dist < 1.0) continue;
+
+    toTarget.normalize();
+    const angle = forwardDir.angleTo(toTarget);
+
+    if (angle < minAngle) {
+      aimAssistRay.set(eyePos, toTarget);
+      aimAssistRay.far = dist;
+      const wallIntersects = aimAssistRay.intersectObjects(obstacleMeshes, true);
+      if (wallIntersects.length === 0) {
+        minAngle = angle;
+        bestTarget = chestPos;
+      }
+    }
+  }
+
+  if (bestTarget) {
+    const toTarget = bestTarget.clone().sub(eyePos);
+    const desiredYaw = Math.atan2(-toTarget.x, -toTarget.z);
+    const horizDist = Math.hypot(toTarget.x, toTarget.z);
+    const desiredPitch = Math.atan2(toTarget.y, horizDist);
+
+    let diffYaw = desiredYaw - camYaw;
+    while (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
+    while (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
+
+    const diffPitch = desiredPitch - camPitch;
+    const assistStrength = isFiringHeld ? 3.8 : 2.2;
+    camYaw += diffYaw * Math.min(1.0, assistStrength * dt);
+    camPitch += diffPitch * Math.min(1.0, assistStrength * dt);
+    camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
   }
 }
 
@@ -918,7 +972,7 @@ document.getElementById('btn-tab-toggle').addEventListener('click', (e) => {
   toggleScoreboard();
 });
 
-// PC Keyboard Controls
+// PC Keyboard
 const keys = { forward: false, backward: false, left: false, right: false };
 
 function triggerJump() {
@@ -1014,12 +1068,14 @@ window.addEventListener('mouseup', (e) => {
   }
 });
 
-// Mobile Controls
+// Mobile Controls (with Drag-Aim On Fire Button)
 let joyTouchId = null;
 let lookTouchId = null;
+let fireTouchId = null;
 let joyStart = { x: 0, y: 0 };
 let joyInput = { x: 0, y: 0 };
 let lastLook = { x: 0, y: 0 };
+let lastFireLook = { x: 0, y: 0 };
 
 const joyBase = document.getElementById('joystick-base');
 const joyStick = document.getElementById('joystick-stick');
@@ -1032,7 +1088,7 @@ window.addEventListener('touchstart', (e) => {
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
     const el = document.elementFromPoint(t.clientX, t.clientY);
-    if (el && (el.classList.contains('action-btn') || el.id === 'btn-gyro' || el.id === 'btn-tab-toggle' || el.id === 'btn-swap-weapon')) continue;
+    if (el && (el.id === 'btn-fire' || el.id === 'btn-gyro' || el.id === 'btn-tab-toggle' || el.id === 'btn-swap-weapon' || el.id === 'btn-reload' || el.id === 'btn-jump' || el.id === 'btn-dash' || el.id === 'btn-scope')) continue;
 
     if (t.clientX < window.innerWidth / 2 && t.clientY > 60 && joyTouchId === null) {
       joyTouchId = t.identifier;
@@ -1053,6 +1109,8 @@ window.addEventListener('touchmove', (e) => {
   if (platformMode === 'pc' || e.target.closest('#lobby')) return;
   e.preventDefault();
 
+  const scopeFactor = isScoped ? 0.35 : 1.0;
+
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
     if (t.identifier === joyTouchId) {
@@ -1071,7 +1129,13 @@ window.addEventListener('touchmove', (e) => {
       const dx = t.clientX - lastLook.x;
       const dy = t.clientY - lastLook.y;
       lastLook = { x: t.clientX, y: t.clientY };
-      const scopeFactor = isScoped ? 0.35 : 1.0;
+      camYaw -= dx * 0.0038 * userSensitivity * scopeFactor;
+      camPitch -= dy * 0.0038 * userSensitivity * scopeFactor;
+      camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
+    } else if (t.identifier === fireTouchId) {
+      const dx = t.clientX - lastFireLook.x;
+      const dy = t.clientY - lastFireLook.y;
+      lastFireLook = { x: t.clientX, y: t.clientY };
       camYaw -= dx * 0.0038 * userSensitivity * scopeFactor;
       camPitch -= dy * 0.0038 * userSensitivity * scopeFactor;
       camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
@@ -1088,11 +1152,30 @@ const endTouches = (e) => {
       joyBase.style.display = 'none';
     } else if (t.identifier === lookTouchId) {
       lookTouchId = null;
+    } else if (t.identifier === fireTouchId) {
+      fireTouchId = null;
+      isFiringHeld = false;
     }
   }
 };
 window.addEventListener('touchend', endTouches);
 window.addEventListener('touchcancel', endTouches);
+
+const btnFire = document.getElementById('btn-fire');
+btnFire.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  fireTouchId = t.identifier;
+  lastFireLook = { x: t.clientX, y: t.clientY };
+  isFiringHeld = true;
+  executeSingleShot();
+}, { passive: false });
+
+btnFire.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  fireTouchId = null;
+  isFiringHeld = false;
+}, { passive: false });
 
 document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
   e.preventDefault();
@@ -1102,6 +1185,11 @@ document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
 document.getElementById('btn-dash').addEventListener('touchstart', (e) => {
   e.preventDefault();
   triggerDash();
+}, { passive: false });
+
+document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  triggerReload();
 }, { passive: false });
 
 // Mobile Gyroscope
@@ -1251,17 +1339,15 @@ function executeSingleShot() {
   lastShotTime = performance.now();
   continuousShots++;
 
-  // SPREAD MODEL: First 4 bullets have 0 spread while standing (pure precision)
+  const crouchSpreadMult = isCrouching ? 0.4 : 1.0;
   let spreadAmount = 0;
   if (continuousShots > 4) {
-    const crouchSpreadMult = isCrouching ? 0.4 : 1.0;
     spreadAmount = Math.min(0.042, (continuousShots - 4) * 0.006) * crouchSpreadMult;
   }
 
   const spreadX = (Math.random() - 0.5) * spreadAmount;
   const spreadY = (Math.random() - 0.5) * spreadAmount;
 
-  // RECOIL MODEL: Minimal kick for bullets 1-4, scaling up on spray
   let basePitchKick = continuousShots <= 4 ? 0.008 : 0.022 + Math.min(0.02, (continuousShots - 4) * 0.0025);
   let baseYawKick = continuousShots <= 4 ? 0.003 : 0.015;
 
@@ -1376,17 +1462,6 @@ function triggerReload() {
     }
   }, 16);
 }
-
-document.getElementById('btn-fire').addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  isFiringHeld = true;
-  executeSingleShot();
-}, { passive: false });
-
-document.getElementById('btn-fire').addEventListener('touchend', (e) => {
-  e.preventDefault();
-  isFiringHeld = false;
-}, { passive: false });
 
 document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
   e.preventDefault();
@@ -1589,6 +1664,14 @@ function addKillFeed(msg) {
 function handleJoin(e) {
   if (e) e.preventDefault();
   ensureAudio();
+
+  // Fullscreen on mobile entry
+  if (platformMode === 'mobile' && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch((err) => {
+      console.warn("Fullscreen request blocked or not supported:", err);
+    });
+  }
+
   const name = document.getElementById('player-name').value.trim() || 'Agent';
   const room = document.getElementById('room-input').value.trim().toUpperCase() || 'MAIN';
   joinRoom(room, name);
@@ -1623,6 +1706,9 @@ function animate(time) {
   if (gameMode === 'offline') {
     updateOfflineBots(dt);
   }
+
+  // Mobile Target-Lock Aim Assist
+  applyMobileAimAssist(dt);
 
   // Full-Auto Spray
   if (isFiringHeld && currentWeapon === 'rifle' && !player.isDead) {
