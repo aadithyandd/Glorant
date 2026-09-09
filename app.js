@@ -30,7 +30,7 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 /* =================================================================
-   2. AUDIO PLAYER (dash.wav, shoot.wav, walk.wav, 1-5.wav)
+   2. AUDIO PLAYER & PRECISE FOOTSTEPS
    ================================================================= */
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
@@ -40,10 +40,10 @@ function ensureAudio() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
-// User-supplied custom audio files
 const audioDash = new Audio('dash.wav');
 const audioShoot = new Audio('shoot.wav');
 const audioWalk = new Audio('walk.wav');
+audioWalk.loop = true;
 
 const killAudios = [
   new Audio('1.wav'),
@@ -114,21 +114,18 @@ const SoundFx = {
     });
   },
 
-  footstep() {
-    playSound(audioWalk, () => {
-      const t = audioCtx.currentTime;
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(75, t);
-      osc.frequency.exponentialRampToValueAtTime(25, t + 0.06);
-      gain.gain.setValueAtTime(0.12, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(t);
-      osc.stop(t + 0.06);
-    });
+  startWalk() {
+    ensureAudio();
+    if (audioWalk.paused) {
+      audioWalk.play().catch(() => {});
+    }
+  },
+
+  stopWalk() {
+    if (!audioWalk.paused) {
+      audioWalk.pause();
+      audioWalk.currentTime = 0;
+    }
   },
 
   knifeSlash() {
@@ -278,7 +275,7 @@ sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
 /* =================================================================
-   4. WEAPON RIGS & REAVER KARAMBIT (.GLB)
+   4. WEAPON RIGS & VALORANT KARAMBIT REVERSE-GRIP
    ================================================================= */
 const gunPivot = new THREE.Group();
 gunPivot.frustumCulled = false;
@@ -307,22 +304,42 @@ rifleGroup.add(rifleMag);
 const flashMat = new THREE.MeshBasicMaterial({ color: 0xffea00, visible: false });
 const muzzleFlash = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), flashMat);
 muzzleFlash.position.set(0.2, -0.2, -1.05);
+muzzleFlash.frustumCulled = false;
 rifleGroup.add(muzzleFlash);
 gunPivot.add(rifleGroup);
 
-// REAVER KARAMBIT HOLDER
+// KARAMBIT RIG (MATCHING IMAGE 2 POSE)
 const karambitHolder = new THREE.Group();
-karambitHolder.position.set(0.2, -0.2, -0.42);
+// Placed front-right of camera
+karambitHolder.position.set(0.28, -0.28, -0.52);
+karambitHolder.rotation.set(-0.2, -0.4, 0.3); // Tilted forward-inward
 karambitHolder.visible = false;
 gunPivot.add(karambitHolder);
 
-// Procedural fallback karambit mesh
+// First-person black tactical glove/hand
+const handMat = new THREE.MeshLambertMaterial({ color: 0x121518 });
+const armMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.45, 8), handMat);
+armMesh.rotation.x = Math.PI / 3;
+armMesh.rotation.z = -Math.PI / 6;
+armMesh.position.set(0.08, -0.16, 0.18);
+karambitHolder.add(armMesh);
+
+const fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, 0.15), handMat);
+fistMesh.position.set(0, 0, 0);
+karambitHolder.add(fistMesh);
+
+// Large Karambit Blade Model
+const bladeContainer = new THREE.Group();
+karambitHolder.add(bladeContainer);
+
+// Procedural curved blade (Fallback if .glb is loading)
 const fallbackBlade = new THREE.Mesh(
-  new THREE.TorusGeometry(0.12, 0.025, 8, 24, Math.PI),
-  new THREE.MeshStandardMaterial({ color: 0x7722bb, metalness: 0.9, roughness: 0.2 })
+  new THREE.TorusGeometry(0.22, 0.038, 8, 30, Math.PI * 0.75),
+  new THREE.MeshStandardMaterial({ color: 0x991133, emissive: 0x440011, metalness: 0.95, roughness: 0.15 })
 );
-fallbackBlade.rotation.z = Math.PI / 2;
-karambitHolder.add(fallbackBlade);
+fallbackBlade.rotation.set(Math.PI / 2, 0, Math.PI / 3);
+fallbackBlade.position.set(-0.06, 0.05, -0.15);
+bladeContainer.add(fallbackBlade);
 
 // Load reaver_karambit.glb
 if (typeof THREE.GLTFLoader !== 'undefined') {
@@ -331,17 +348,19 @@ if (typeof THREE.GLTFLoader !== 'undefined') {
     'reaver_karambit.glb',
     (gltf) => {
       const kModel = gltf.scene;
-      kModel.scale.set(0.18, 0.18, 0.18);
-      kModel.rotation.set(0, -Math.PI / 2, 0);
-      karambitHolder.remove(fallbackBlade);
-      karambitHolder.add(kModel);
+      // Made larger & rotated into reverse-grip index-finger pose
+      kModel.scale.set(0.48, 0.48, 0.48);
+      kModel.position.set(-0.02, 0.02, -0.12);
+      kModel.rotation.set(Math.PI * 0.9, -Math.PI * 0.35, -Math.PI * 0.2);
+      bladeContainer.remove(fallbackBlade);
+      bladeContainer.add(kModel);
     },
     undefined,
-    () => { console.log("Using procedural Reaver Karambit model."); }
+    () => { console.log("Using procedural large Reaver Karambit."); }
   );
 }
 
-// Karambit Spin State
+// Spin Animation variables
 let isSpinningKarambit = false;
 let karambitSpinAngle = 0;
 
@@ -541,7 +560,7 @@ function updateTracers(dt) {
 }
 
 /* =================================================================
-   7. ENEMY MODEL RIG & BILLBOARD NAME TAGS
+   7. ENEMY MODEL RIG WITH HITBOX TAGGING
    ================================================================= */
 function createNameTagSprite(name) {
   const c = document.createElement('canvas');
@@ -581,42 +600,55 @@ function createHighVisEnemy(name) {
   const enemyRedMat = new THREE.MeshLambertMaterial({ color: 0xff1e38 });
   const glowVisorMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
 
+  // Torso / Body Hitbox
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.65, 0.36), enemyRedMat);
   chest.position.y = 1.15;
   chest.castShadow = true;
+  chest.hitZone = 'body';
   modelRoot.add(chest);
 
+  // Head Hitbox
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.32, 0.3), suitMat);
   head.position.y = 1.68;
   head.castShadow = true;
+  head.hitZone = 'head';
   modelRoot.add(head);
 
   const visor = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.1, 0.12), glowVisorMat);
   visor.position.set(0, 1.7, 0.16);
+  visor.hitZone = 'head';
   modelRoot.add(visor);
 
+  // Arms
   const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), suitMat);
   lArm.position.set(-0.38, 1.15, 0.1);
   lArm.rotation.x = -Math.PI / 4;
+  lArm.hitZone = 'body';
   modelRoot.add(lArm);
 
   const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), suitMat);
   rArm.position.set(0.38, 1.15, 0.1);
   rArm.rotation.x = -Math.PI / 4;
+  rArm.hitZone = 'body';
   modelRoot.add(rArm);
 
+  // Rifle
   const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.6), suitMat);
   rifle.position.set(0.22, 1.05, 0.38);
+  rifle.hitZone = 'body';
   modelRoot.add(rifle);
 
+  // Legs Hitbox
   const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, 0.24), suitMat);
   lLeg.position.set(-0.17, 0.4, 0);
   lLeg.castShadow = true;
+  lLeg.hitZone = 'legs';
   modelRoot.add(lLeg);
 
   const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, 0.24), suitMat);
   rLeg.position.set(0.17, 0.4, 0);
   rLeg.castShadow = true;
+  rLeg.hitZone = 'legs';
   modelRoot.add(rLeg);
 
   const nameSprite = createNameTagSprite(name || 'ENEMY');
@@ -629,13 +661,12 @@ function createHighVisEnemy(name) {
 }
 
 /* =================================================================
-   8. INPUTS, SENSITIVITY & PRACTICE BOTS (OFFLINE INFINITE)
+   8. INPUTS, SENSITIVITY & PRACTICE BOTS
    ================================================================= */
 let platformMode = 'mobile';
-let gameMode = 'online'; // 'online' or 'offline'
+let gameMode = 'online';
 let userSensitivity = 1.0;
 
-// Editable down to 0.1
 const sensSlider = document.getElementById('sens-slider');
 const sensLabel = document.getElementById('sens-label');
 sensSlider.addEventListener('input', (e) => {
@@ -684,14 +715,13 @@ const player = {
 
 let currentRoom = null;
 const remotePlayers = {};
-const offlineBots = []; // Array of bot objects
+const offlineBots = [];
 let allLobbyScores = {};
 let recentDamageDealers = [];
 
 let camYaw = 0;
 let camPitch = 0;
 
-// Practice bots spawner
 function spawnOfflineBot(id) {
   const name = `BOT ${id + 1}`;
   const mesh = createHighVisEnemy(name);
@@ -821,7 +851,6 @@ function updatePlayerVisibilities() {
   }
 }
 
-// Mode Selector (Online / Offline Bots)
 document.querySelectorAll('.mode-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -831,7 +860,6 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
   });
 });
 
-// Platform Selector
 document.querySelectorAll('.plat-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -841,7 +869,6 @@ document.querySelectorAll('.plat-btn').forEach(btn => {
   });
 });
 
-// Scoreboard
 const sbModal = document.getElementById('scoreboard-modal');
 const sbRows = document.getElementById('sb-rows');
 let isScoreboardOpen = false;
@@ -872,7 +899,6 @@ document.getElementById('btn-tab-toggle').addEventListener('click', (e) => {
   toggleScoreboard();
 });
 
-// PC Keyboard
 const keys = { forward: false, backward: false, left: false, right: false };
 
 function triggerJump() {
@@ -1089,7 +1115,7 @@ function checkCollision(targetX, targetZ) {
 }
 
 /* =================================================================
-   9. ATTACK SYSTEM (REAVER SPIN FLOURISH & DAMAGE)
+   9. ATTACK SYSTEM & HITBOX DAMAGE (HEAD, BODY, LEGS)
    ================================================================= */
 const vignetteEl = document.getElementById('damage-vignette');
 const raycaster = new THREE.Raycaster();
@@ -1107,11 +1133,23 @@ function triggerDamageScreen() {
   }, 200);
 }
 
+// Calculates exact damage based on hit location
+function calculateShotDamage(hitObject, hitPoint, targetMesh) {
+  const localY = hitPoint.y - targetMesh.position.y;
+  if (hitObject.hitZone === 'head' || localY >= 1.45) {
+    return 55; // 2 shots to eliminate 100 HP
+  } else if (hitObject.hitZone === 'legs' || localY < 0.75) {
+    return 15; // 7 shots to eliminate 100 HP
+  } else {
+    return 22; // 5 shots to eliminate 100 HP (Body)
+  }
+}
+
 function triggerFire() {
   if (player.isReloading || player.isDead) return;
 
   if (currentWeapon === 'knife') {
-    // REAVER KARAMBIT SMOOTH 360 SPIN
+    // Flourish / Attack Spin
     isSpinningKarambit = true;
     karambitSpinAngle = 0;
     SoundFx.knifeSlash();
@@ -1119,7 +1157,6 @@ function triggerFire() {
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
     if (gameMode === 'offline') {
-      // Offline Bot Hit Check
       const activeBotMeshes = offlineBots.filter(b => !b.isDead).map(b => b.mesh);
       const hits = raycaster.intersectObjects(activeBotMeshes, true);
       if (hits.length > 0 && hits[0].distance <= 3.5) {
@@ -1141,7 +1178,7 @@ function triggerFire() {
       return;
     }
 
-    // Online Hit Check
+    // Online Knife Hit
     const activeTargets = Object.values(remotePlayers).filter(m => !m.isDead);
     const hits = raycaster.intersectObjects(activeTargets, true);
 
@@ -1187,7 +1224,6 @@ function triggerFire() {
   raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
   if (gameMode === 'offline') {
-    // Offline Hitscan
     const activeBotMeshes = offlineBots.filter(b => !b.isDead).map(b => b.mesh);
     const botHits = raycaster.intersectObjects(activeBotMeshes, true);
     const wallHits = raycaster.intersectObjects(obstacleMeshes, true);
@@ -1202,7 +1238,8 @@ function triggerFire() {
       endPoint.copy(botHits[0].point);
       const hitBot = offlineBots.find(b => b.mesh.getObjectById(botHits[0].object.id));
       if (hitBot && !hitBot.isDead) {
-        hitBot.hp -= 35;
+        const dmg = calculateShotDamage(botHits[0].object, botHits[0].point, hitBot.mesh);
+        hitBot.hp -= dmg;
         if (hitBot.hp <= 0) {
           hitBot.isDead = true;
           hitBot.mesh.isDead = true;
@@ -1220,7 +1257,7 @@ function triggerFire() {
     return;
   }
 
-  // Online Multiplayer Hitscan
+  // Online Multiplayer
   const activeTargets = Object.values(remotePlayers).filter(m => !m.isDead);
   const playerHits = raycaster.intersectObjects(activeTargets, true);
   const wallHits = raycaster.intersectObjects(obstacleMeshes, true);
@@ -1235,12 +1272,17 @@ function triggerFire() {
     endPoint.copy(playerHits[0].point);
     const hitObj = playerHits[0].object;
     let targetId = null;
+    let targetMesh = null;
     for (let id in remotePlayers) {
-      if (remotePlayers[id].getObjectById(hitObj.id)) targetId = id;
+      if (remotePlayers[id].getObjectById(hitObj.id)) {
+        targetId = id;
+        targetMesh = remotePlayers[id];
+      }
     }
-    if (targetId && currentRoom) {
+    if (targetId && currentRoom && targetMesh) {
+      const dmg = calculateShotDamage(hitObj, playerHits[0].point, targetMesh);
       const damageRef = ref(db, `rooms/${currentRoom}/players/${targetId}/damage`);
-      push(damageRef, { fromId: player.id, fromName: player.name, amount: 35, time: Date.now() });
+      push(damageRef, { fromId: player.id, fromName: player.name, amount: dmg, time: Date.now() });
     }
   } else {
     endPoint = camera.position.clone().add(raycaster.ray.direction.clone().multiplyScalar(90));
@@ -1277,7 +1319,7 @@ document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 /* =================================================================
-   10. MULTIPLAYER ROOMS, LAG FIX & SMOOTH INTERPOLATION
+   10. MULTIPLAYER ROOMS & RESPAWN
    ================================================================= */
 const deathScreen = document.getElementById('death-screen');
 const respawnText = document.getElementById('respawn-text');
@@ -1288,6 +1330,7 @@ function die(killerName, killerId) {
   player.isDead = true;
   hpDisplay.innerText = 0;
   if (isScoped) toggleScope();
+  SoundFx.stopWalk();
 
   triggerDamageScreen();
   deathScreen.style.display = 'flex';
@@ -1364,7 +1407,6 @@ async function joinRoom(roomId, name) {
     return;
   }
 
-  // Ghost Purge
   try {
     const existingSnap = await get(ref(db, `rooms/${roomId}/players`));
     if (existingSnap.exists()) {
@@ -1447,6 +1489,8 @@ async function joinRoom(roomId, name) {
     remove(snap.ref);
     if (player.isDead) return;
 
+    recentDamageDealers.push({ fromId: hit.fromId, fromName: hit.fromName, time: hit.time || Date.now() });
+
     player.hp -= hit.amount;
     hpDisplay.innerText = Math.max(0, player.hp);
     triggerDamageScreen();
@@ -1479,15 +1523,13 @@ document.getElementById('btn-join').addEventListener('touchend', handleJoin, { p
 document.getElementById('btn-join').addEventListener('click', handleJoin);
 
 /* =================================================================
-   11. MAIN ENGINE LOOP, WEAPON ANIMATIONS & LAG REDUCTION
+   11. ENGINE LOOP, MOVEMENT AUDIO & ROTATION
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
-let footstepTimer = 0;
 const moveSpeed = 8.5;
 const GRAVITY = 24.0;
 
-// Bandwidth optimization: deadband tracking
 let lastSentX = 0;
 let lastSentZ = 0;
 let lastSentYaw = 0;
@@ -1506,12 +1548,12 @@ function animate(time) {
     updateOfflineBots(dt);
   }
 
-  // Smooth Karambit 360 Spin Animation
+  // Smooth Karambit Spin
   if (isSpinningKarambit) {
-    karambitSpinAngle += dt * 18.0; // Rapid clean rotation
-    karambitHolder.rotation.x = karambitSpinAngle;
+    karambitSpinAngle += dt * 19.0;
+    bladeContainer.rotation.z = -karambitSpinAngle;
     if (karambitSpinAngle >= Math.PI * 2) {
-      karambitHolder.rotation.x = 0;
+      bladeContainer.rotation.z = 0;
       isSpinningKarambit = false;
     }
   }
@@ -1521,7 +1563,7 @@ function animate(time) {
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.22);
   camera.updateProjectionMatrix();
 
-  // Recoil decay
+  // Recoil
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
 
@@ -1545,23 +1587,18 @@ function animate(time) {
 
   const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05;
 
-  // Smooth Weapon Sway & Footsteps
+  // STRICT WALK SOUND: ONLY plays when moving keys are actively down and grounded
   if (isMoving && player.isGrounded && !player.isDead) {
+    SoundFx.startWalk();
     const bobFactor = isScoped ? 0.0008 : 0.004;
-    gunPivot.position.y += Math.sin(time * 0.012) * bobFactor;
-    gunPivot.position.x += Math.cos(time * 0.006) * (bobFactor * 0.6);
-
-    footstepTimer += dt;
-    if (footstepTimer > 0.38) {
-      SoundFx.footstep();
-      footstepTimer = 0;
-    }
+    gunPivot.position.y = Math.sin(time * 0.012) * bobFactor;
+    gunPivot.position.x = Math.cos(time * 0.006) * (bobFactor * 0.6);
   } else {
-    gunPivot.position.y += Math.sin(time * 0.003) * 0.0004;
-    footstepTimer = 0.3;
+    SoundFx.stopWalk();
+    gunPivot.position.y = Math.sin(time * 0.003) * 0.0004;
   }
 
-  // Dash & Movement
+  // Movement & Dash
   if (dashDuration > 0) {
     dashDuration -= dt;
     const dX = THREE.MathUtils.clamp(camera.position.x + dashVelocity.x * dt, -MAP_BOUND, MAP_BOUND);
@@ -1605,7 +1642,7 @@ function animate(time) {
     }
   }
 
-  // Smooth Interpolation of Remote Players (eliminates network stutter)
+  // Network Sync
   if (gameMode === 'online') {
     for (let id in remotePlayers) {
       const p = remotePlayers[id];
@@ -1614,7 +1651,6 @@ function animate(time) {
       }
     }
 
-    // Network Sync (throttled to 12 updates/sec with deadband to kill server lag)
     if (currentRoom && time - lastNetworkSync > 85) {
       const moved = Math.hypot(camera.position.x - lastSentX, camera.position.z - lastSentZ) > 0.05;
       const rotated = Math.abs(camYaw - lastSentYaw) > 0.02;
