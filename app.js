@@ -300,7 +300,7 @@ muzzleFlash.frustumCulled = false;
 rifleGroup.add(muzzleFlash);
 gunPivot.add(rifleGroup);
 
-// REPOSITIONED & FLIPPED KARAMBIT RIG
+// REPOSITIONED & FLIPPED KARAMBIT RIG (NORTH TO SOUTH)
 const karambitHolder = new THREE.Group();
 karambitHolder.position.set(0.23, -0.21, -0.45);
 karambitHolder.rotation.set(0.1, -0.15, -0.05);
@@ -315,7 +315,7 @@ karambitHolder.add(fistMesh);
 const bladeContainer = new THREE.Group();
 karambitHolder.add(bladeContainer);
 
-// Procedural fallback blade: ring bottom, claw points up/forward
+// Procedural fallback blade
 const ringHandle = new THREE.Mesh(
   new THREE.TorusGeometry(0.065, 0.016, 8, 24),
   new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.85, roughness: 0.2 })
@@ -887,6 +887,7 @@ document.querySelectorAll('.plat-btn').forEach(btn => {
   });
 });
 
+// Scoreboard Modal Logic (T Key)
 const sbModal = document.getElementById('scoreboard-modal');
 const sbRows = document.getElementById('sb-rows');
 let isScoreboardOpen = false;
@@ -917,6 +918,7 @@ document.getElementById('btn-tab-toggle').addEventListener('click', (e) => {
   toggleScoreboard();
 });
 
+// PC Keyboard Controls
 const keys = { forward: false, backward: false, left: false, right: false };
 
 function triggerJump() {
@@ -935,8 +937,8 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Hold Left-Ctrl to Crouch
-  if (e.code === 'ControlLeft') {
+  // Hold Shift to Crouch
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
     isCrouching = true;
     targetEyeHeight = CROUCH_EYE_HEIGHT;
     return;
@@ -945,7 +947,8 @@ window.addEventListener('keydown', (e) => {
   if (e.key === '1') setWeapon('rifle');
   if (e.key === '2') setWeapon('knife');
 
-  if (k === 'e' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+  // Dash with E
+  if (k === 'e') {
     e.preventDefault();
     triggerDash();
     return;
@@ -965,8 +968,8 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
   const k = e.key.toLowerCase();
 
-  // Release Ctrl to Stand
-  if (e.code === 'ControlLeft') {
+  // Release Shift to Stand
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
     isCrouching = false;
     targetEyeHeight = STAND_EYE_HEIGHT;
     return;
@@ -1154,7 +1157,7 @@ function checkCollision(targetX, targetZ) {
 }
 
 /* =================================================================
-   9. ATTACK SYSTEM, 1-TAP HEADSHOT & CROUCH ACCURACY
+   9. ATTACK SYSTEM, 1-TAP HEADSHOT & STANDING/CROUCH ACCURACY
    ================================================================= */
 const vignetteEl = document.getElementById('damage-vignette');
 const raycaster = new THREE.Raycaster();
@@ -1248,20 +1251,27 @@ function executeSingleShot() {
   lastShotTime = performance.now();
   continuousShots++;
 
-  const crouchSpreadMult = isCrouching ? 0.4 : 1.0;
+  // SPREAD MODEL: First 4 bullets have 0 spread while standing (pure precision)
   let spreadAmount = 0;
-  if (continuousShots > 2) {
-    spreadAmount = Math.min(0.045, (continuousShots - 2) * 0.005) * crouchSpreadMult;
+  if (continuousShots > 4) {
+    const crouchSpreadMult = isCrouching ? 0.4 : 1.0;
+    spreadAmount = Math.min(0.042, (continuousShots - 4) * 0.006) * crouchSpreadMult;
   }
 
   const spreadX = (Math.random() - 0.5) * spreadAmount;
   const spreadY = (Math.random() - 0.5) * spreadAmount;
 
+  // RECOIL MODEL: Minimal kick for bullets 1-4, scaling up on spray
+  let basePitchKick = continuousShots <= 4 ? 0.008 : 0.022 + Math.min(0.02, (continuousShots - 4) * 0.0025);
+  let baseYawKick = continuousShots <= 4 ? 0.003 : 0.015;
+
   const crouchRecoilMult = isCrouching ? 0.6 : 1.0;
-  const recoilMult = (isScoped ? 0.4 : 1.0) * crouchRecoilMult;
-  player.recoilPitch += (0.018 + Math.min(0.02, continuousShots * 0.002)) * recoilMult;
-  player.recoilYaw += ((Math.random() - 0.5) * 0.015) * recoilMult;
-  gunPivot.position.z += 0.04;
+  const scopeRecoilMult = isScoped ? 0.4 : 1.0;
+  const totalRecoilMult = scopeRecoilMult * crouchRecoilMult;
+
+  player.recoilPitch += basePitchKick * totalRecoilMult;
+  player.recoilYaw += ((Math.random() - 0.5) * baseYawKick) * totalRecoilMult;
+  gunPivot.position.z += continuousShots <= 4 ? 0.02 : 0.04;
 
   muzzleFlash.material.visible = true;
   setTimeout(() => { muzzleFlash.material.visible = false; }, 35);
@@ -1588,7 +1598,7 @@ document.getElementById('btn-join').addEventListener('touchend', handleJoin, { p
 document.getElementById('btn-join').addEventListener('click', handleJoin);
 
 /* =================================================================
-   11. ENGINE LOOP & ANIMATIONS
+   11. MAIN ENGINE LOOP, CROUCH INTERPOLATION & DIPPING RELOAD
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
@@ -1621,11 +1631,12 @@ function animate(time) {
     }
   }
 
+  // Spray reset
   if (!isFiringHeld && time - lastShotTime > 350) {
     continuousShots = 0;
   }
 
-  // Karambit Spin Attack
+  // Smooth Karambit Spin Attack
   if (isSpinningKarambit) {
     karambitSpinAngle += dt * 19.0;
     bladeContainer.rotation.z = -karambitSpinAngle;
@@ -1640,14 +1651,14 @@ function animate(time) {
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.22);
   camera.updateProjectionMatrix();
 
-  // Smooth Crouch Eye Level Transition
+  // Smooth Eye Height Transition (Crouch / Stand)
   currentEyeHeight = THREE.MathUtils.lerp(currentEyeHeight, targetEyeHeight, 0.2);
 
   // Recoil decay
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
 
-  // RELOAD DIPPING ANIMATION
+  // RELOAD WEAPON DIPPING ANIMATION
   const reloadDipY = -reloadAnimProgress * 0.35;
   gunPivot.position.y = THREE.MathUtils.lerp(gunPivot.position.y, reloadDipY, 0.25);
   gunPivot.position.z = THREE.MathUtils.lerp(gunPivot.position.z, 0, 0.2);
@@ -1671,7 +1682,7 @@ function animate(time) {
 
   const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05;
 
-  // STRICT WALK SOUND
+  // STRICT WALK SOUND: Stop immediately when released
   if (isMoving && player.isGrounded && !player.isDead) {
     SoundFx.startWalk();
     const bobFactor = isScoped ? 0.0008 : 0.004;
@@ -1715,7 +1726,7 @@ function animate(time) {
     }
   }
 
-  // Gravity
+  // Gravity & Crouch Eye Level
   if (!player.isDead) {
     const wasInAir = !player.isGrounded;
     player.vy -= GRAVITY * dt;
@@ -1731,7 +1742,7 @@ function animate(time) {
     }
   }
 
-  // Network Sync
+  // Network Sync & Remote Player Interpolation
   if (gameMode === 'online') {
     for (let id in remotePlayers) {
       const p = remotePlayers[id];
