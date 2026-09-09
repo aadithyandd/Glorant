@@ -13,17 +13,17 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
 
 /* =================================================================
-   1. FIREBASE CONFIG
+   1. FIREBASE CONFIG (glorant2)
    ================================================================= */
 const firebaseConfig = {
-  apiKey: "AIzaSyA0KjzzkcCZbMotQLc1ZAoNEA-vf1xrUnI",
-  authDomain: "glorant-c8c61.firebaseapp.com",
-  databaseURL: "https://glorant-c8c61-default-rtdb.firebaseio.com",
-  projectId: "glorant-c8c61",
-  storageBucket: "glorant-c8c61.firebasestorage.app",
-  messagingSenderId: "630709282831",
-  appId: "1:630709282831:web:54c633dcbfcd26c0e29b7a",
-  measurementId: "G-NCSTJ1JMHH"
+  apiKey: "AIzaSyDvrF150yb8yknmVtB6E3k5v6oiSKIUox8",
+  authDomain: "glorant2.firebaseapp.com",
+  databaseURL: "https://glorant2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "glorant2",
+  storageBucket: "glorant2.firebasestorage.app",
+  messagingSenderId: "387435691945",
+  appId: "1:387435691945:web:503bd10843e3ca4e410eb8",
+  measurementId: "G-Y94BKR8SFF"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -40,7 +40,6 @@ function ensureAudio() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
-// User-supplied audio files
 const audioDash = new Audio('dash.wav');
 const audioShoot = new Audio('shoot.wav');
 const audioWalk = new Audio('walk.wav');
@@ -237,7 +236,7 @@ const SoundFx = {
    ================================================================= */
 const canvas = document.querySelector('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -263,12 +262,12 @@ scene.add(ambientLight);
 const sunLight = new THREE.DirectionalLight(0xffeedd, 1.25);
 sunLight.position.set(60, 120, 50);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.width = 1024;
-sunLight.shadow.mapSize.height = 1024;
+sunLight.shadow.mapSize.width = 512;
+sunLight.shadow.mapSize.height = 512;
 scene.add(sunLight);
 
 /* =================================================================
-   4. WEAPON RIGS & FLIPPED KARAMBIT (RING BOTTOM, BLADE UP)
+   4. WEAPON RIGS & FLIPPED KARAMBIT
    ================================================================= */
 const gunPivot = new THREE.Group();
 gunPivot.frustumCulled = false;
@@ -301,14 +300,13 @@ muzzleFlash.frustumCulled = false;
 rifleGroup.add(muzzleFlash);
 gunPivot.add(rifleGroup);
 
-// REPOSITIONED & FLIPPED KARAMBIT (SOUTH TO NORTH)
+// REPOSITIONED & FLIPPED KARAMBIT RIG
 const karambitHolder = new THREE.Group();
 karambitHolder.position.set(0.23, -0.21, -0.45);
 karambitHolder.rotation.set(0.1, -0.15, -0.05);
 karambitHolder.visible = false;
 gunPivot.add(karambitHolder);
 
-// Small glove mesh
 const handMat = new THREE.MeshLambertMaterial({ color: 0x14181c });
 const fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.075, 0.085), handMat);
 fistMesh.position.set(0.01, -0.06, 0.02);
@@ -317,7 +315,7 @@ karambitHolder.add(fistMesh);
 const bladeContainer = new THREE.Group();
 karambitHolder.add(bladeContainer);
 
-// Procedural fallback blade: ring at bottom, claw points upward/forward
+// Procedural fallback blade: ring bottom, claw points up/forward
 const ringHandle = new THREE.Mesh(
   new THREE.TorusGeometry(0.065, 0.016, 8, 24),
   new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.85, roughness: 0.2 })
@@ -334,7 +332,6 @@ const bladeBody = new THREE.Mesh(
     roughness: 0.15
   })
 );
-// Inverted North to South: blade now curves upward
 bladeBody.rotation.set(Math.PI / 2, 0, Math.PI * 0.7);
 bladeBody.position.set(-0.02, 0.08, -0.15);
 bladeContainer.add(bladeBody);
@@ -348,7 +345,6 @@ if (typeof THREE.GLTFLoader !== 'undefined') {
       const kModel = gltf.scene;
       kModel.scale.set(0.72, 0.72, 0.72);
       kModel.position.set(0.0, 0.02, -0.1);
-      // Flipped North to South (Z & X rotation inverted 180 degrees)
       kModel.rotation.set(Math.PI * 0.1, Math.PI * 0.65, -Math.PI * 0.2);
       bladeContainer.remove(bladeBody);
       bladeContainer.remove(ringHandle);
@@ -359,15 +355,12 @@ if (typeof THREE.GLTFLoader !== 'undefined') {
   );
 }
 
-// Spin animation state
 let isSpinningKarambit = false;
 let karambitSpinAngle = 0;
 
 let currentWeapon = 'rifle';
 let isScoped = false;
 let isCrouching = false;
-
-// Smooth Reload Animation State (dip down & return up)
 let reloadAnimProgress = 0;
 
 const scopeOverlay = document.getElementById('scope-overlay');
@@ -564,7 +557,7 @@ function updateTracers(dt) {
 }
 
 /* =================================================================
-   7. EYELESS ENEMY RIG WITH EXPLICIT AIM DIRECTION
+   7. ENEMY MODEL RIG (EYELESS SILHOUETTE)
    ================================================================= */
 function createNameTagSprite(name) {
   const c = document.createElement('canvas');
@@ -618,7 +611,7 @@ function createHighVisEnemy(name) {
   head.hitZone = 'head';
   modelRoot.add(head);
 
-  // Arms holding gun pointing forward
+  // Arms
   const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), suitMat);
   lArm.position.set(-0.35, 1.15, 0.15);
   lArm.rotation.x = -Math.PI / 3;
@@ -631,7 +624,7 @@ function createHighVisEnemy(name) {
   rArm.hitZone = 'body';
   modelRoot.add(rArm);
 
-  // Prominent rifle pointing in facing direction
+  // Rifle indicating facing orientation
   const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.8), gunBarrelMat);
   rifle.position.set(0.18, 1.1, 0.5);
   rifle.hitZone = 'body';
@@ -660,7 +653,7 @@ function createHighVisEnemy(name) {
 }
 
 /* =================================================================
-   8. INPUTS, CROUCH ACCURACY & PING
+   8. INPUTS, SENSITIVITY & BOTS
    ================================================================= */
 let platformMode = 'mobile';
 let gameMode = 'online';
@@ -894,7 +887,6 @@ document.querySelectorAll('.plat-btn').forEach(btn => {
   });
 });
 
-// Scoreboard Modal Logic (T Key)
 const sbModal = document.getElementById('scoreboard-modal');
 const sbRows = document.getElementById('sb-rows');
 let isScoreboardOpen = false;
@@ -925,7 +917,6 @@ document.getElementById('btn-tab-toggle').addEventListener('click', (e) => {
   toggleScoreboard();
 });
 
-// PC Keyboard
 const keys = { forward: false, backward: false, left: false, right: false };
 
 function triggerJump() {
@@ -1257,7 +1248,6 @@ function executeSingleShot() {
   lastShotTime = performance.now();
   continuousShots++;
 
-  // CROUCH SPREAD MODIFIER: 60% less spread when crouching
   const crouchSpreadMult = isCrouching ? 0.4 : 1.0;
   let spreadAmount = 0;
   if (continuousShots > 2) {
@@ -1267,7 +1257,6 @@ function executeSingleShot() {
   const spreadX = (Math.random() - 0.5) * spreadAmount;
   const spreadY = (Math.random() - 0.5) * spreadAmount;
 
-  // Crouch recoil reduction
   const crouchRecoilMult = isCrouching ? 0.6 : 1.0;
   const recoilMult = (isScoped ? 0.4 : 1.0) * crouchRecoilMult;
   player.recoilPitch += (0.018 + Math.min(0.02, continuousShots * 0.002)) * recoilMult;
@@ -1350,7 +1339,7 @@ function executeSingleShot() {
   spawnTracer(muzzleWorld, endPoint);
 }
 
-// SMOOTH RELOAD DIPPING ANIMATION
+// RELOAD DIPPING ANIMATION
 function triggerReload() {
   if (currentWeapon === 'knife' || player.isReloading || player.ammo === player.maxAmmo || player.isDead) return;
   if (isScoped) toggleScope();
@@ -1359,14 +1348,13 @@ function triggerReload() {
   ammoDisplay.innerText = `RELOAD...`;
   SoundFx.reload();
 
-  const reloadDuration = 1200; // ms
+  const reloadDuration = 1200;
   const reloadStart = performance.now();
 
   const reloadInterval = setInterval(() => {
     const elapsed = performance.now() - reloadStart;
     const p = Math.min(1.0, elapsed / reloadDuration);
 
-    // Dip down and return smoothly
     reloadAnimProgress = Math.sin(p * Math.PI);
 
     if (p >= 1.0) {
@@ -1600,7 +1588,7 @@ document.getElementById('btn-join').addEventListener('touchend', handleJoin, { p
 document.getElementById('btn-join').addEventListener('click', handleJoin);
 
 /* =================================================================
-   11. MAIN ENGINE LOOP, CROUCH INTERPOLATION & DIPPING RELOAD
+   11. ENGINE LOOP & ANIMATIONS
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
@@ -1633,12 +1621,11 @@ function animate(time) {
     }
   }
 
-  // Spray reset
   if (!isFiringHeld && time - lastShotTime > 350) {
     continuousShots = 0;
   }
 
-  // Smooth Karambit Spin Attack
+  // Karambit Spin Attack
   if (isSpinningKarambit) {
     karambitSpinAngle += dt * 19.0;
     bladeContainer.rotation.z = -karambitSpinAngle;
@@ -1653,14 +1640,14 @@ function animate(time) {
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.22);
   camera.updateProjectionMatrix();
 
-  // Smooth Eye Height Transition (Crouch / Stand)
+  // Smooth Crouch Eye Level Transition
   currentEyeHeight = THREE.MathUtils.lerp(currentEyeHeight, targetEyeHeight, 0.2);
 
   // Recoil decay
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
 
-  // RELOAD WEAPON DIPPING ANIMATION: smoothly dips down -0.35m
+  // RELOAD DIPPING ANIMATION
   const reloadDipY = -reloadAnimProgress * 0.35;
   gunPivot.position.y = THREE.MathUtils.lerp(gunPivot.position.y, reloadDipY, 0.25);
   gunPivot.position.z = THREE.MathUtils.lerp(gunPivot.position.z, 0, 0.2);
@@ -1684,7 +1671,7 @@ function animate(time) {
 
   const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05;
 
-  // STRICT WALK SOUND: Stop immediately when released
+  // STRICT WALK SOUND
   if (isMoving && player.isGrounded && !player.isDead) {
     SoundFx.startWalk();
     const bobFactor = isScoped ? 0.0008 : 0.004;
@@ -1728,7 +1715,7 @@ function animate(time) {
     }
   }
 
-  // Gravity & Crouch Eye Level
+  // Gravity
   if (!player.isDead) {
     const wasInAir = !player.isGrounded;
     player.vy -= GRAVITY * dt;
