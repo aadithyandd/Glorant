@@ -8,7 +8,8 @@ import {
   push, 
   onChildAdded, 
   remove, 
-  onDisconnect 
+  onDisconnect,
+  get
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
 
 /* =================================================================
@@ -49,7 +50,6 @@ const EYE_HEIGHT = 1.6;
 camera.position.set(0, EYE_HEIGHT, 15);
 scene.add(camera);
 
-// Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
 scene.add(ambientLight);
 
@@ -61,38 +61,33 @@ sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
 /* =================================================================
-   3. FIRST-PERSON GUN RIG (ALWAYS VISIBLE)
+   3. FIRST-PERSON GUN VIEWMODEL
    ================================================================= */
 const gunPivot = new THREE.Group();
 gunPivot.frustumCulled = false;
 camera.add(gunPivot);
 
-// Gun materials
-const gunMat = new THREE.MeshLambertMaterial({ color: 0x22262c, depthTest: true });
-const gunBarrelMat = new THREE.MeshLambertMaterial({ color: 0x111316, depthTest: true });
-const gunAccentMat = new THREE.MeshLambertMaterial({ color: 0xff4655, depthTest: true });
+const gunMat = new THREE.MeshLambertMaterial({ color: 0x22262c });
+const gunBarrelMat = new THREE.MeshLambertMaterial({ color: 0x111316 });
+const gunAccentMat = new THREE.MeshLambertMaterial({ color: 0xff4655 });
 
-// Receiver
 const rifleBody = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.55), gunMat);
 rifleBody.position.set(0.2, -0.22, -0.5);
 rifleBody.frustumCulled = false;
 gunPivot.add(rifleBody);
 
-// Barrel
 const rifleBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8), gunBarrelMat);
 rifleBarrel.rotation.x = -Math.PI / 2;
 rifleBarrel.position.set(0.2, -0.2, -0.85);
 rifleBarrel.frustumCulled = false;
 gunPivot.add(rifleBarrel);
 
-// Magazine / Grip
 const rifleMag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.1), gunAccentMat);
 rifleMag.position.set(0.2, -0.32, -0.45);
 rifleMag.rotation.x = Math.PI / 8;
 rifleMag.frustumCulled = false;
 gunPivot.add(rifleMag);
 
-// Muzzle Flash
 const flashMat = new THREE.MeshBasicMaterial({ color: 0xffea00, visible: false });
 const muzzleFlash = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), flashMat);
 muzzleFlash.position.set(0.2, -0.2, -1.05);
@@ -100,7 +95,7 @@ muzzleFlash.frustumCulled = false;
 gunPivot.add(muzzleFlash);
 
 /* =================================================================
-   4. PROCEDURAL OPEN-WORLD ARENA (BOXES & WALLS GUARANTEED)
+   4. PROCEDURAL OPEN-WORLD ARENA (BOXES & OBSTACLES)
    ================================================================= */
 const colliders = [];
 const MAP_SIZE = 300;
@@ -113,7 +108,6 @@ function registerBoxCollider(minX, minY, minZ, maxX, maxY, maxZ) {
   ));
 }
 
-// Procedural Ground Grid Texture
 function createTerrainTexture() {
   const c = document.createElement('canvas');
   c.width = 512;
@@ -139,7 +133,6 @@ terrain.rotation.x = -Math.PI / 2;
 terrain.receiveShadow = true;
 scene.add(terrain);
 
-// Outer Boundaries
 const wallMat = new THREE.MeshLambertMaterial({ color: 0x11161d });
 function createPerimeterWall(w, h, d, x, z) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
@@ -152,27 +145,22 @@ createPerimeterWall(MAP_SIZE, 14, 4, 0, MAP_SIZE / 2);
 createPerimeterWall(4, 14, MAP_SIZE, -MAP_SIZE / 2, 0);
 createPerimeterWall(4, 14, MAP_SIZE, MAP_SIZE / 2, 0);
 
-// Materials for Obstacles
 const boxMats = [
-  new THREE.MeshLambertMaterial({ color: 0x27435b }), // Blue Industrial
-  new THREE.MeshLambertMaterial({ color: 0x8a3224 }), // Rust Red
-  new THREE.MeshLambertMaterial({ color: 0x364a3e }), // Olive Camo
-  new THREE.MeshLambertMaterial({ color: 0x222a33 })  // Tactical Concrete
+  new THREE.MeshLambertMaterial({ color: 0x27435b }),
+  new THREE.MeshLambertMaterial({ color: 0x8a3224 }),
+  new THREE.MeshLambertMaterial({ color: 0x364a3e }),
+  new THREE.MeshLambertMaterial({ color: 0x222a33 })
 ];
 
-// Spawn Guaranteed Obstacle Types
 function spawnObstacleBox(type, x, z) {
   const g = new THREE.Group();
-
   if (type === 0) {
-    // Large Shipping Container (w: 4.5, h: 3.2, d: 9)
     const m = new THREE.Mesh(new THREE.BoxGeometry(4.5, 3.2, 9), boxMats[Math.floor(Math.random() * 3)]);
     m.position.y = 1.6;
     m.castShadow = m.receiveShadow = true;
     g.add(m);
     registerBoxCollider(x - 2.25, 0, z - 4.5, x + 2.25, 3.2, z + 4.5);
   } else if (type === 1) {
-    // Two-Story Watchtower Base (w: 7, h: 4, d: 7)
     const m = new THREE.Mesh(new THREE.BoxGeometry(7, 4, 7), boxMats[3]);
     m.position.y = 2;
     m.castShadow = m.receiveShadow = true;
@@ -183,7 +171,6 @@ function spawnObstacleBox(type, x, z) {
     g.add(roof);
     registerBoxCollider(x - 3.5, 0, z - 3.5, x + 3.5, 4.4, z + 3.5);
   } else {
-    // Concrete Cover Cube (w: 3.2, h: 2.2, d: 3.2)
     const m = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.2, 3.2), boxMats[3]);
     m.position.y = 1.1;
     m.castShadow = m.receiveShadow = true;
@@ -195,7 +182,6 @@ function spawnObstacleBox(type, x, z) {
   scene.add(g);
 }
 
-// Generate 90 Random Spread Obstacles Across Map
 let randSeed = 1337;
 function nextRandom() {
   randSeed = (randSeed * 16807) % 2147483647;
@@ -205,8 +191,6 @@ function nextRandom() {
 for (let i = 0; i < 90; i++) {
   const ox = (nextRandom() - 0.5) * (MAP_SIZE - 40);
   const oz = (nextRandom() - 0.5) * (MAP_SIZE - 40);
-
-  // Preserve spawn point circle (12-unit clear radius)
   if (Math.hypot(ox, oz) > 12) {
     const oType = Math.floor(nextRandom() * 3);
     spawnObstacleBox(oType, ox, oz);
@@ -241,7 +225,7 @@ function updateTracers(dt) {
 }
 
 /* =================================================================
-   6. ENEMY AVATARS & NAME TAGS
+   6. REAL ENEMY AVATARS & NAME TAGS
    ================================================================= */
 function createNameTagSprite(name) {
   const c = document.createElement('canvas');
@@ -280,24 +264,20 @@ function createHighVisEnemy(name) {
   const enemyRedMat = new THREE.MeshLambertMaterial({ color: 0xff1e38 });
   const glowVisorMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
 
-  // Torso
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.65, 0.36), enemyRedMat);
   chest.position.y = 1.15;
   chest.castShadow = true;
   modelRoot.add(chest);
 
-  // Head
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.32, 0.3), suitMat);
   head.position.y = 1.68;
   head.castShadow = true;
   modelRoot.add(head);
 
-  // Visor
   const visor = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.1, 0.12), glowVisorMat);
   visor.position.set(0, 1.7, 0.16);
   modelRoot.add(visor);
 
-  // Arms
   const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), suitMat);
   lArm.position.set(-0.38, 1.15, 0.1);
   lArm.rotation.x = -Math.PI / 4;
@@ -308,12 +288,10 @@ function createHighVisEnemy(name) {
   rArm.rotation.x = -Math.PI / 4;
   modelRoot.add(rArm);
 
-  // Rifle
   const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.6), suitMat);
   rifle.position.set(0.22, 1.05, 0.38);
   modelRoot.add(rifle);
 
-  // Legs
   const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, 0.24), suitMat);
   lLeg.position.set(-0.17, 0.4, 0);
   lLeg.castShadow = true;
@@ -331,7 +309,7 @@ function createHighVisEnemy(name) {
 }
 
 /* =================================================================
-   7. INPUTS, "T" SCOREBOARD & PHYSICS
+   7. INPUTS, DASH ABILITY & "T" SCOREBOARD
    ================================================================= */
 let platformMode = 'mobile';
 let userSensitivity = 1.0;
@@ -342,6 +320,13 @@ sensSlider.addEventListener('input', (e) => {
   userSensitivity = parseFloat(e.target.value);
   sensLabel.innerText = `SENS: ${userSensitivity.toFixed(1)}x`;
 });
+
+const DASH_COOLDOWN = 10000; // 10 seconds
+let lastDashTime = 0;
+let dashVelocity = { x: 0, z: 0 };
+let dashDuration = 0;
+
+const dashDisplay = document.getElementById('dash-val');
 
 const player = {
   id: 'p_' + Math.random().toString(36).substr(2, 9),
@@ -367,6 +352,41 @@ let recentDamageDealers = [];
 
 let camYaw = 0;
 let camPitch = 0;
+
+function triggerDash() {
+  const now = performance.now();
+  if (player.isDead || now - lastDashTime < DASH_COOLDOWN) return;
+
+  lastDashTime = now;
+  dashDuration = 0.18; // 180ms burst
+
+  // Dash in facing direction or joystick vector
+  const sinY = Math.sin(camYaw);
+  const cosY = Math.cos(camYaw);
+  const dashSpeed = 34.0;
+
+  dashVelocity.x = -sinY * dashSpeed;
+  dashVelocity.z = -cosY * dashSpeed;
+
+  // Visual recoil forward
+  camera.fov = 82;
+  camera.updateProjectionMatrix();
+  setTimeout(() => {
+    camera.fov = 72;
+    camera.updateProjectionMatrix();
+  }, 220);
+}
+
+function updateDashCooldownUI(now) {
+  const remaining = Math.max(0, Math.ceil((DASH_COOLDOWN - (now - lastDashTime)) / 1000));
+  if (remaining > 0) {
+    dashDisplay.innerText = `${remaining}s`;
+    dashDisplay.classList.add('cooldown');
+  } else {
+    dashDisplay.innerText = platformMode === 'pc' ? 'READY [E]' : 'READY';
+    dashDisplay.classList.remove('cooldown');
+  }
+}
 
 // Platform Selector
 document.querySelectorAll('.plat-btn').forEach(btn => {
@@ -409,7 +429,7 @@ document.getElementById('btn-tab-toggle').addEventListener('click', (e) => {
   toggleScoreboard();
 });
 
-// PC Keyboard Controls ("T" toggles scoreboard)
+// PC Keyboard Controls
 const keys = { forward: false, backward: false, left: false, right: false };
 
 function triggerJump() {
@@ -422,10 +442,16 @@ function triggerJump() {
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
 
-  // "T" key toggles scoreboard
   if (k === 't') {
     e.preventDefault();
     toggleScoreboard();
+    return;
+  }
+
+  // Dash with E or Shift
+  if (k === 'e' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+    e.preventDefault();
+    triggerDash();
     return;
   }
 
@@ -448,7 +474,7 @@ window.addEventListener('keyup', (e) => {
   if (e.code === 'KeyD' || k === 'd' || e.code === 'ArrowRight') keys.right = false;
 });
 
-// PC Mouse Aiming
+// PC Mouse
 canvas.addEventListener('click', () => {
   if (platformMode === 'pc' && document.getElementById('lobby').style.display === 'none') {
     canvas.requestPointerLock();
@@ -554,7 +580,12 @@ document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
   triggerJump();
 }, { passive: false });
 
-// Mobile Gyroscope
+document.getElementById('btn-dash').addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  triggerDash();
+}, { passive: false });
+
+// Gyroscope
 let gyroActive = false;
 let lastGamma = null;
 let lastBeta = null;
@@ -593,7 +624,6 @@ window.addEventListener('deviceorientation', (e) => {
   lastBeta = e.beta;
 });
 
-// AABB Collision check
 function checkCollision(targetX, targetZ) {
   const pRadius = 0.45;
   const playerBox = new THREE.Box3(
@@ -692,7 +722,7 @@ document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 /* =================================================================
-   9. MULTIPLAYER ROOMS, KDA SCORE SYNC & DEATH
+   9. MULTIPLAYER ROOMS, PURGING OLD GHOSTS & STATS
    ================================================================= */
 const deathScreen = document.getElementById('death-screen');
 const respawnText = document.getElementById('respawn-text');
@@ -768,12 +798,13 @@ function respawn() {
       isDead: false,
       x: camera.position.x,
       y: camera.position.y,
-      z: camera.position.z
+      z: camera.position.z,
+      lastSeen: Date.now()
     });
   }
 }
 
-function joinRoom(roomId, name) {
+async function joinRoom(roomId, name) {
   currentRoom = roomId;
   player.name = name || 'Agent';
 
@@ -783,6 +814,22 @@ function joinRoom(roomId, name) {
   if (platformMode === 'pc') {
     document.getElementById('mobile-controls').style.display = 'none';
     document.getElementById('btn-gyro').style.display = 'none';
+  }
+
+  // PURGE OLD GHOST PLAYERS: Remove any player from DB who hasn't updated in 25s
+  try {
+    const existingSnap = await get(ref(db, `rooms/${roomId}/players`));
+    if (existingSnap.exists()) {
+      const allP = existingSnap.val();
+      const cutoff = Date.now() - 25000;
+      for (let pKey in allP) {
+        if (!allP[pKey].lastSeen || allP[pKey].lastSeen < cutoff) {
+          remove(ref(db, `rooms/${roomId}/players/${pKey}`));
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Ghost purge check skipped:", e);
   }
 
   const playerRef = ref(db, `rooms/${roomId}/players/${player.id}`);
@@ -797,7 +844,8 @@ function joinRoom(roomId, name) {
     kills: 0,
     deaths: 0,
     assists: 0,
-    isDead: false
+    isDead: false,
+    lastSeen: Date.now()
   });
   onDisconnect(playerRef).remove();
 
@@ -895,8 +943,9 @@ function animate(time) {
   lastTime = time;
 
   updateTracers(dt);
+  updateDashCooldownUI(time);
 
-  // Recoil decay & spring recovery
+  // Recoil recovery
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
   gunPivot.position.z = THREE.MathUtils.lerp(gunPivot.position.z, 0, 0.2);
@@ -904,7 +953,7 @@ function animate(time) {
   camera.rotation.y = camYaw + player.recoilYaw;
   camera.rotation.x = camPitch + player.recoilPitch;
 
-  // Resolve inputs
+  // Resolve Inputs
   let inputX = 0;
   let inputZ = 0;
 
@@ -918,8 +967,16 @@ function animate(time) {
     inputZ = joyInput.y;
   }
 
-  // Horizontal Movement with Map Boundary Clamping
-  if (!player.isDead && (Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05)) {
+  // Handle Dash Movement
+  if (dashDuration > 0) {
+    dashDuration -= dt;
+    const dX = THREE.MathUtils.clamp(camera.position.x + dashVelocity.x * dt, -MAP_BOUND, MAP_BOUND);
+    const dZ = THREE.MathUtils.clamp(camera.position.z + dashVelocity.z * dt, -MAP_BOUND, MAP_BOUND);
+
+    if (!checkCollision(dX, camera.position.z)) camera.position.x = dX;
+    if (!checkCollision(camera.position.x, dZ)) camera.position.z = dZ;
+  } else if (!player.isDead && (Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05)) {
+    // Normal Movement
     const sinY = Math.sin(camYaw);
     const cosY = Math.cos(camYaw);
 
@@ -942,7 +999,7 @@ function animate(time) {
     }
   }
 
-  // Gravity & Floor Collision
+  // Gravity
   if (!player.isDead) {
     player.vy -= GRAVITY * dt;
     camera.position.y += player.vy * dt;
@@ -956,14 +1013,15 @@ function animate(time) {
     }
   }
 
-  // Network Sync (20 ticks/sec)
+  // Network Sync with heartbeat timestamp
   if (currentRoom && time - lastNetworkSync > 50) {
     lastNetworkSync = time;
     update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
       x: camera.position.x,
       y: camera.position.y,
       z: camera.position.z,
-      yaw: camYaw
+      yaw: camYaw,
+      lastSeen: Date.now()
     });
   }
 
