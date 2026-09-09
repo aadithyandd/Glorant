@@ -481,4 +481,10 @@ button.btn:active { background: #d33240; }
   font-size: 0.75rem;
   border-color: #00d4ff;
 }
+.ping-pill {
+  color: #00ffcc !important;
+  font-family: monospace;
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+}
 #btn-dash:active { background: #00d4ff; color: #000; }
