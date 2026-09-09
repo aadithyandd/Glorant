@@ -12,6 +12,12 @@
   <canvas id="c"></canvas>
   <div id="damage-vignette"></div>
 
+  <!-- Valorant Tactical Kill Banner -->
+  <div id="kill-banner">
+    <div class="kill-skull">&#9760;</div>
+    <div class="kill-text" id="kill-banner-text">KILL</div>
+  </div>
+
   <!-- Scoreboard Overlay (Press T) -->
   <div id="scoreboard-modal">
     <div class="sb-card">
@@ -54,13 +60,14 @@
         <input type="range" id="sens-slider" min="0.4" max="3.0" step="0.1" value="1.0" />
       </div>
 
+      <button id="btn-swap-weapon" class="hud-pill">WEAPON: RIFLE</button>
       <button id="btn-tab-toggle" class="hud-pill">[T] SCORES</button>
       <button id="btn-gyro" class="hud-pill">GYRO: OFF</button>
       
       <div id="killfeed"></div>
     </div>
 
-    <!-- Valorant Crosshair -->
+    <!-- Crosshair -->
     <div id="crosshair">
       <div class="ch-line ch-t"></div>
       <div class="ch-line ch-b"></div>
@@ -76,13 +83,13 @@
 
     <div class="bottom-hud">
       <div class="stat-box">HP <span id="hp-val" class="hp-val">100</span></div>
-      <!-- Dash Cooldown Indicator -->
+      <div class="stat-box">SLOT <span id="slot-val" class="slot-val">RIFLE</span></div>
       <div class="stat-box">DASH <span id="dash-val" class="dash-val">READY [E]</span></div>
       <div class="stat-box">AMMO <span id="ammo-val" class="ammo-val">25/25</span></div>
     </div>
   </div>
 
-  <!-- Mobile Controls Layer -->
+  <!-- Mobile Controls -->
   <div id="mobile-controls">
     <div id="move-zone" class="touch-zone"></div>
     <div id="look-zone" class="touch-zone"></div>
