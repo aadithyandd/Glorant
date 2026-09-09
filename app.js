@@ -685,7 +685,6 @@ function measurePing() {
 }
 setInterval(measurePing, 2500);
 
-// REDUCED DASH COOLDOWN: 1000ms (1 second)
 const DASH_COOLDOWN = 1000;
 let lastDashTime = 0;
 let dashVelocity = { x: 0, z: 0 };
@@ -811,6 +810,7 @@ function respawnBot(bot) {
   }, 3500);
 }
 
+// DIRECTIONAL DASH (W A S D or Mobile Joystick)
 function triggerDash() {
   const now = performance.now();
   if (player.isDead || now - lastDashTime < DASH_COOLDOWN) return;
@@ -819,12 +819,37 @@ function triggerDash() {
   dashDuration = 0.18;
   SoundFx.dash();
 
+  const dashSpeed = 34.0;
+  let moveDirX = 0;
+  let moveDirZ = 0;
+
+  if (platformMode === 'pc') {
+    if (keys.forward) moveDirZ += 1;
+    if (keys.backward) moveDirZ -= 1;
+    if (keys.left) moveDirX -= 1;
+    if (keys.right) moveDirX += 1;
+  } else {
+    moveDirX = joyInput.x;
+    moveDirZ = joyInput.y; // joyInput.y is already inverted forward vector
+  }
+
   const sinY = Math.sin(camYaw);
   const cosY = Math.cos(camYaw);
-  const dashSpeed = 34.0;
 
-  dashVelocity.x = -sinY * dashSpeed;
-  dashVelocity.z = -cosY * dashSpeed;
+  if (Math.abs(moveDirX) > 0.05 || Math.abs(moveDirZ) > 0.05) {
+    const fwdX = -sinY * moveDirZ;
+    const fwdZ = -cosY * moveDirZ;
+    const strafeX = cosY * moveDirX;
+    const strafeZ = -sinY * moveDirX;
+
+    const len = Math.hypot(fwdX + strafeX, fwdZ + strafeZ);
+    dashVelocity.x = ((fwdX + strafeX) / len) * dashSpeed;
+    dashVelocity.z = ((fwdZ + strafeZ) / len) * dashSpeed;
+  } else {
+    // Default forward dash if standing completely still
+    dashVelocity.x = -sinY * dashSpeed;
+    dashVelocity.z = -cosY * dashSpeed;
+  }
 
   camera.fov = 82;
   camera.updateProjectionMatrix();
@@ -858,7 +883,7 @@ function applyMobileAimAssist(dt) {
   const eyePos = camera.position;
 
   let bestTarget = null;
-  let minAngle = 0.32; // ~18-degree subtle assist cone
+  let minAngle = 0.32;
 
   for (let pMesh of targetPool) {
     if (pMesh.isDead) continue;
@@ -991,7 +1016,6 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Hold Shift to Crouch
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
     isCrouching = true;
     targetEyeHeight = CROUCH_EYE_HEIGHT;
@@ -1001,7 +1025,6 @@ window.addEventListener('keydown', (e) => {
   if (e.key === '1') setWeapon('rifle');
   if (e.key === '2') setWeapon('knife');
 
-  // Dash with E
   if (k === 'e') {
     e.preventDefault();
     triggerDash();
@@ -1022,7 +1045,6 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
   const k = e.key.toLowerCase();
 
-  // Release Shift to Stand
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
     isCrouching = false;
     targetEyeHeight = STAND_EYE_HEIGHT;
@@ -1068,7 +1090,7 @@ window.addEventListener('mouseup', (e) => {
   }
 });
 
-// Mobile Controls (with Drag-Aim On Fire Button)
+// Mobile Controls
 let joyTouchId = null;
 let lookTouchId = null;
 let fireTouchId = null;
@@ -1665,7 +1687,6 @@ function handleJoin(e) {
   if (e) e.preventDefault();
   ensureAudio();
 
-  // Fullscreen on mobile entry
   if (platformMode === 'mobile' && document.documentElement.requestFullscreen) {
     document.documentElement.requestFullscreen().catch((err) => {
       console.warn("Fullscreen request blocked or not supported:", err);
@@ -1707,22 +1728,18 @@ function animate(time) {
     updateOfflineBots(dt);
   }
 
-  // Mobile Target-Lock Aim Assist
   applyMobileAimAssist(dt);
 
-  // Full-Auto Spray
   if (isFiringHeld && currentWeapon === 'rifle' && !player.isDead) {
     if (time - lastShotTime >= FIRE_RATE_DELAY) {
       executeSingleShot();
     }
   }
 
-  // Spray reset
   if (!isFiringHeld && time - lastShotTime > 350) {
     continuousShots = 0;
   }
 
-  // Smooth Karambit Spin Attack
   if (isSpinningKarambit) {
     karambitSpinAngle += dt * 19.0;
     bladeContainer.rotation.z = -karambitSpinAngle;
@@ -1732,19 +1749,15 @@ function animate(time) {
     }
   }
 
-  // Smooth Scope FOV
   const targetFov = isScoped ? 28 : 72;
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.22);
   camera.updateProjectionMatrix();
 
-  // Smooth Eye Height Transition (Crouch / Stand)
   currentEyeHeight = THREE.MathUtils.lerp(currentEyeHeight, targetEyeHeight, 0.2);
 
-  // Recoil decay
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
 
-  // RELOAD WEAPON DIPPING ANIMATION
   const reloadDipY = -reloadAnimProgress * 0.35;
   gunPivot.position.y = THREE.MathUtils.lerp(gunPivot.position.y, reloadDipY, 0.25);
   gunPivot.position.z = THREE.MathUtils.lerp(gunPivot.position.z, 0, 0.2);
@@ -1752,7 +1765,6 @@ function animate(time) {
   camera.rotation.y = camYaw + player.recoilYaw;
   camera.rotation.x = camPitch + player.recoilPitch;
 
-  // Resolve Inputs
   let inputX = 0;
   let inputZ = 0;
 
@@ -1768,7 +1780,6 @@ function animate(time) {
 
   const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05;
 
-  // STRICT WALK SOUND: Stop immediately when released
   if (isMoving && player.isGrounded && !player.isDead) {
     SoundFx.startWalk();
     const bobFactor = isScoped ? 0.0008 : 0.004;
@@ -1779,7 +1790,6 @@ function animate(time) {
     gunPivot.position.y += Math.sin(time * 0.003) * 0.0004;
   }
 
-  // Dash & Movement
   if (dashDuration > 0) {
     dashDuration -= dt;
     const dX = THREE.MathUtils.clamp(camera.position.x + dashVelocity.x * dt, -MAP_BOUND, MAP_BOUND);
@@ -1812,7 +1822,6 @@ function animate(time) {
     }
   }
 
-  // Gravity & Crouch Eye Level
   if (!player.isDead) {
     const wasInAir = !player.isGrounded;
     player.vy -= GRAVITY * dt;
@@ -1828,7 +1837,6 @@ function animate(time) {
     }
   }
 
-  // Network Sync & Remote Player Interpolation
   if (gameMode === 'online') {
     for (let id in remotePlayers) {
       const p = remotePlayers[id];
