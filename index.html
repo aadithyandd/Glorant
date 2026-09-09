@@ -6,12 +6,29 @@
   <title>V-STRIKE 3D</title>
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
 
   <canvas id="c"></canvas>
   <div id="damage-vignette"></div>
+
+  <!-- Scoreboard Overlay (TAB) -->
+  <div id="scoreboard-modal">
+    <div class="sb-card">
+      <div class="sb-header">MATCH LEADERBOARD</div>
+      <table id="sb-table">
+        <thead>
+          <tr>
+            <th>AGENT</th>
+            <th>K</th>
+            <th>D</th>
+            <th>A</th>
+          </tr>
+        </thead>
+        <tbody id="sb-rows"></tbody>
+      </table>
+    </div>
+  </div>
 
   <!-- Lobby Overlay -->
   <div id="lobby">
@@ -20,7 +37,6 @@
       <input type="text" id="player-name" placeholder="Agent Name" maxlength="10" />
       <input type="text" id="room-input" placeholder="Room Code (e.g. BIND)" maxlength="6" />
       
-      <!-- Platform Selection -->
       <div class="platform-toggle">
         <button type="button" class="plat-btn active" data-plat="mobile">MOBILE</button>
         <button type="button" class="plat-btn" data-plat="pc">PC (WASD)</button>
@@ -33,13 +49,15 @@
   <!-- In-game HUD -->
   <div id="hud">
     <div class="top-bar">
-      <!-- Sensitivity Adjuster -->
       <div class="sens-container">
         <span id="sens-label">SENS: 1.0x</span>
         <input type="range" id="sens-slider" min="0.4" max="3.0" step="0.1" value="1.0" />
       </div>
 
+      <!-- Scoreboard Button for Mobile / Status for PC -->
+      <button id="btn-tab-toggle" class="hud-pill">TAB</button>
       <button id="btn-gyro" class="hud-pill">GYRO: OFF</button>
+      
       <div id="killfeed"></div>
     </div>
 
@@ -52,13 +70,11 @@
       <div class="ch-dot"></div>
     </div>
 
-    <!-- Death Banner -->
     <div id="death-screen">
       <div class="elim-title">ELIMINATED</div>
       <div class="respawn-timer" id="respawn-text">RESPAWNING IN 3...</div>
     </div>
 
-    <!-- Bottom Stat HUD -->
     <div class="bottom-hud">
       <div class="stat-box">HP <span id="hp-val" class="hp-val">100</span></div>
       <div class="stat-box">AMMO <span id="ammo-val" class="ammo-val">25/25</span></div>
