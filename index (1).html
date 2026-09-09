@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>V-STRIKE 3D</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <!-- WebGL Render Canvas -->
+  <canvas id="c"></canvas>
+
+  <!-- Lobby / Room UI -->
+  <div id="lobby">
+    <div class="title">V-STRIKE</div>
+    <div class="card">
+      <input type="text" id="player-name" placeholder="Agent Name" maxlength="10" />
+      <input type="text" id="room-input" placeholder="Room Code (e.g. BIND)" maxlength="6" />
+      <button class="btn" id="btn-join">Join Match</button>
+    </div>
+  </div>
+
+  <!-- In-game HUD -->
+  <div id="hud">
+    <div id="crosshair">
+      <div class="ch-line ch-t"></div>
+      <div class="ch-line ch-b"></div>
+      <div class="ch-line ch-l"></div>
+      <div class="ch-line ch-r"></div>
+    </div>
+    <div id="killfeed"></div>
+    <div class="bottom-hud">
+      <div class="stat-box">HP <span id="hp-val" class="hp-val">100</span></div>
+      <div class="stat-box">AMMO <span id="ammo-val" class="ammo-val">25/25</span></div>
+    </div>
+  </div>
+
+  <!-- Mobile Controls Layer -->
+  <div id="move-zone" class="touch-zone"></div>
+  <div id="look-zone" class="touch-zone"></div>
+  <div id="joystick-base"><div id="joystick-stick"></div></div>
+
+  <!-- Touch Action Buttons -->
+  <button id="btn-fire" class="action-btn">FIRE</button>
+  <button id="btn-reload" class="action-btn">R</button>
+
+  <!-- Main Game Engine Script -->
+  <script type="module" src="script.js"></script>
+</body>
+</html>
