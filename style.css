@@ -23,10 +23,8 @@ body, html {
   width: 100%;
   height: 100%;
   z-index: 1;
-  touch-action: none;
 }
 
-/* DAMAGE RED FLASH / LOW HP VIGNETTE */
 #damage-vignette {
   position: absolute;
   inset: 0;
@@ -53,21 +51,21 @@ body, html {
 }
 
 .title {
-  font-size: 2.4rem;
+  font-size: 2.5rem;
   font-weight: 900;
   letter-spacing: 4px;
   color: #ff4655;
   text-transform: uppercase;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   text-shadow: 0 0 15px rgba(255, 70, 85, 0.4);
 }
 
 .card {
-  background: rgba(15, 25, 35, 0.9);
+  background: rgba(15, 25, 35, 0.95);
   border: 1px solid #ff4655;
   padding: 24px;
   width: 100%;
-  max-width: 320px;
+  max-width: 330px;
   border-radius: 4px;
   display: flex;
   flex-direction: column;
@@ -86,11 +84,32 @@ input {
   text-transform: uppercase;
   letter-spacing: 1px;
   touch-action: auto !important;
-  pointer-events: auto !important;
 }
 
-input:focus {
-  border-color: #ff4655;
+input:focus { border-color: #ff4655; }
+
+/* PLATFORM SELECTOR BUTTONS */
+.platform-toggle {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0;
+}
+.plat-btn {
+  flex: 1;
+  padding: 10px;
+  background: #192531;
+  border: 1px solid #334454;
+  color: #8b9bb4;
+  font-weight: bold;
+  font-size: 0.85rem;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.plat-btn.active {
+  background: #25394d;
+  border-color: #00ffcc;
+  color: #00ffcc;
+  box-shadow: 0 0 8px rgba(0, 255, 204, 0.3);
 }
 
 button.btn {
@@ -106,12 +125,8 @@ button.btn {
   border-radius: 2px;
   transition: background 0.2s;
   touch-action: auto !important;
-  pointer-events: auto !important;
 }
-
-button.btn:active {
-  background: #d33240;
-}
+button.btn:active { background: #d33240; }
 
 /* HUD */
 #hud {
@@ -130,10 +145,8 @@ button.btn:active {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  pointer-events: none;
 }
 
-/* GYRO TOGGLE (SAFE TOP POSITION) */
 .hud-pill {
   background: rgba(15, 25, 35, 0.85);
   border: 1px solid #44566c;
@@ -149,14 +162,12 @@ button.btn:active {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   z-index: 35;
 }
-
 .hud-pill.active {
   border-color: #00ffcc;
   color: #00ffcc;
   box-shadow: 0 0 10px rgba(0, 255, 204, 0.4);
 }
 
-/* CROSSHAIR */
 #crosshair {
   position: absolute;
   top: 50%;
@@ -165,22 +176,8 @@ button.btn:active {
   width: 16px;
   height: 16px;
 }
-
-.ch-line {
-  position: absolute;
-  background: #00ffcc;
-  box-shadow: 0 0 3px #00ffcc;
-}
-
-.ch-dot {
-  position: absolute;
-  width: 2px;
-  height: 2px;
-  top: 7px;
-  left: 7px;
-  background: #00ffcc;
-}
-
+.ch-line { position: absolute; background: #00ffcc; box-shadow: 0 0 3px #00ffcc; }
+.ch-dot { position: absolute; width: 2px; height: 2px; top: 7px; left: 7px; background: #00ffcc; }
 .ch-t { top: 0; left: 7px; width: 2px; height: 5px; }
 .ch-b { bottom: 0; left: 7px; width: 2px; height: 5px; }
 .ch-l { top: 7px; left: 0; width: 5px; height: 2px; }
@@ -201,17 +198,10 @@ button.btn:active {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
 }
 
-.stat-box {
-  font-family: monospace;
-  color: #fff;
-  font-size: 1.3rem;
-  font-weight: bold;
-}
-
+.stat-box { font-family: monospace; color: #fff; font-size: 1.3rem; font-weight: bold; }
 .hp-val { color: #00ffcc; }
 .ammo-val { color: #ffeb3b; }
 
-/* KILLFEED */
 #killfeed {
   display: flex;
   flex-direction: column;
@@ -220,7 +210,6 @@ button.btn:active {
   font-weight: bold;
   align-items: flex-end;
 }
-
 .kf-item {
   background: rgba(10, 15, 20, 0.8);
   color: #fff;
@@ -229,7 +218,6 @@ button.btn:active {
   border-radius: 2px;
 }
 
-/* DEATH SCREEN */
 #death-screen {
   position: absolute;
   inset: 0;
@@ -241,7 +229,6 @@ button.btn:active {
   justify-content: center;
   z-index: 15;
 }
-
 .elim-title {
   font-size: 2.8rem;
   font-weight: 900;
@@ -249,7 +236,6 @@ button.btn:active {
   letter-spacing: 6px;
   text-shadow: 0 0 25px rgba(255, 70, 85, 0.9);
 }
-
 .respawn-timer {
   color: #fff;
   font-size: 1.1rem;
@@ -259,14 +245,14 @@ button.btn:active {
 }
 
 /* TOUCH CONTROLS */
+#mobile-controls { display: block; }
 .touch-zone {
   position: absolute;
-  top: 60px; /* Leaves clear margin for top bar buttons */
+  top: 60px;
   bottom: 0;
   z-index: 20;
   touch-action: none;
 }
-
 #move-zone { left: 0; width: 50%; }
 #look-zone { right: 0; width: 50%; }
 
@@ -282,7 +268,6 @@ button.btn:active {
   z-index: 25;
   transform: translate(-50%, -50%);
 }
-
 #joystick-stick {
   position: absolute;
   top: 50%;
@@ -295,7 +280,6 @@ button.btn:active {
   box-shadow: 0 0 10px rgba(255, 70, 85, 0.8);
 }
 
-/* BUTTONS */
 .action-btn {
   position: absolute;
   z-index: 30;
@@ -310,7 +294,6 @@ button.btn:active {
   pointer-events: auto;
   touch-action: none;
 }
-
 #btn-fire {
   bottom: 50px;
   right: 25px;
@@ -319,11 +302,7 @@ button.btn:active {
   background: rgba(255, 70, 85, 0.75);
   font-size: 1.1rem;
 }
-
-#btn-fire:active {
-  background: #ff4655;
-}
-
+#btn-fire:active { background: #ff4655; }
 #btn-reload {
   bottom: 140px;
   right: 35px;
