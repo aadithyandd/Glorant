@@ -35,6 +35,45 @@ body, html {
   transition: background 0.08s ease-out, box-shadow 0.15s ease-out;
 }
 
+/* VALORANT KILL BANNER */
+#kill-banner {
+  position: absolute;
+  bottom: 110px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 25;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease-out, transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+#kill-banner.show {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+.kill-skull {
+  font-size: 3.5rem;
+  color: #ff4655;
+  text-shadow: 0 0 20px rgba(255, 70, 85, 0.9), 0 0 40px rgba(255, 230, 0, 0.7);
+  line-height: 1;
+}
+.kill-text {
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: #fff;
+  background: rgba(15, 25, 35, 0.85);
+  border: 1px solid #ff4655;
+  padding: 3px 16px;
+  border-radius: 3px;
+  margin-top: 4px;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px #ff4655;
+}
+
 /* SCOREBOARD OVERLAY */
 #scoreboard-modal {
   position: absolute;
@@ -180,7 +219,7 @@ button.btn {
 }
 button.btn:active { background: #d33240; }
 
-/* IN-GAME HUD */
+/* HUD */
 #hud {
   position: absolute;
   inset: 0;
@@ -275,8 +314,9 @@ button.btn:active { background: #d33240; }
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
 }
 
-.stat-box { font-family: monospace; color: #fff; font-size: 1.2rem; font-weight: bold; }
+.stat-box { font-family: monospace; color: #fff; font-size: 1.15rem; font-weight: bold; }
 .hp-val { color: #00ffcc; }
+.slot-val { color: #ff9900; }
 .dash-val { color: #00d4ff; }
 .dash-val.cooldown { color: #8899aa; }
 .ammo-val { color: #ffeb3b; }
