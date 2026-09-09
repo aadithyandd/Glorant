@@ -12,7 +12,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-database.js";
 
 /* =================================================================
-   1. FIREBASE SETUP
+   1. FIREBASE CONFIG
    ================================================================= */
 const firebaseConfig = {
   apiKey: "AIzaSyA0KjzzkcCZbMotQLc1ZAoNEA-vf1xrUnI",
@@ -24,7 +24,6 @@ const firebaseConfig = {
   appId: "1:630709282831:web:54c633dcbfcd26c0e29b7a",
   measurementId: "G-NCSTJ1JMHH"
 };
-
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
@@ -42,10 +41,10 @@ scene.background = new THREE.Color('#0b1116');
 scene.fog = new THREE.FogExp2('#0b1116', 0.03);
 
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.rotation.order = 'YXZ'; // Essential for FPS camera: yaw (Y) then pitch (X)
+camera.rotation.order = 'YXZ';
 camera.position.set(0, 1.6, 0);
 
-// Lights
+// Lighting
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334455, 0.85);
 scene.add(hemiLight);
 
@@ -64,7 +63,7 @@ const grid = new THREE.GridHelper(80, 40, 0xff4655, 0x2b3844);
 grid.position.y = 0.01;
 scene.add(grid);
 
-// Obstacles / Cover boxes
+// Boxes / Obstacles
 const boxMat = new THREE.MeshLambertMaterial({ color: 0x2d3a45 });
 const boxGeo = new THREE.BoxGeometry(2.5, 2, 2.5);
 for (let i = -3; i <= 3; i++) {
@@ -77,7 +76,7 @@ for (let i = -3; i <= 3; i++) {
   }
 }
 
-// Gun Viewmodel attached to Camera
+// Gun Viewmodel
 const gunPivot = new THREE.Group();
 camera.add(gunPivot);
 scene.add(camera);
@@ -95,7 +94,100 @@ muzzleFlash.position.set(0.18, -0.18, -0.65);
 gunPivot.add(muzzleFlash);
 
 /* =================================================================
-   3. PLAYER STATE
+   3. BULLET TRACER SYSTEM
+   ================================================================= */
+const tracers = [];
+
+function spawnTracer(startVec, endVec) {
+  const points = [startVec, endVec];
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const material = new THREE.LineBasicMaterial({
+    color: 0xffea00,
+    transparent: true,
+    opacity: 1.0,
+    linewidth: 2
+  });
+  const line = new THREE.Line(geometry, material);
+  scene.add(line);
+  tracers.push({ mesh: line, life: 1.0 });
+}
+
+function updateTracers(dt) {
+  for (let i = tracers.length - 1; i >= 0; i--) {
+    const t = tracers[i];
+    t.life -= dt * 6.0;
+    if (t.life <= 0) {
+      scene.remove(t.mesh);
+      t.mesh.geometry.dispose();
+      t.mesh.material.dispose();
+      tracers.splice(i, 1);
+    } else {
+      t.mesh.material.opacity = t.life;
+    }
+  }
+}
+
+/* =================================================================
+   4. PLAYER BILLBOARD NAME TAG GENERATOR
+   ================================================================= */
+function createNameTagSprite(name) {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 64;
+  const ctx = c.getContext('2d');
+
+  ctx.fillStyle = 'rgba(15, 25, 35, 0.75)';
+  ctx.strokeStyle = '#ff4655';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(8, 8, 240, 48, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.font = 'bold 24px monospace';
+  ctx.fillStyle = '#00ffcc';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(name.toUpperCase(), 128, 32);
+
+  const tex = new THREE.CanvasTexture(c);
+  const spriteMat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+  const sprite = new THREE.Sprite(spriteMat);
+  sprite.scale.set(1.5, 0.4, 1);
+  sprite.position.y = 2.1;
+  return sprite;
+}
+
+function createPlayerMesh(name) {
+  const g = new THREE.Group();
+  
+  const modelRoot = new THREE.Group();
+  g.add(modelRoot);
+
+  const body = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.35, 0.35, 1.4, 8),
+    new THREE.MeshLambertMaterial({ color: 0xff4655 })
+  );
+  body.position.y = 0.7;
+  modelRoot.add(body);
+
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22, 8, 8),
+    new THREE.MeshLambertMaterial({ color: 0xece8e1 })
+  );
+  head.position.y = 1.5;
+  modelRoot.add(head);
+
+  const nameSprite = createNameTagSprite(name || 'AGENT');
+  g.add(nameSprite);
+
+  g.modelRoot = modelRoot;
+  g.isDead = false;
+  return g;
+}
+
+/* =================================================================
+   5. PLAYER STATE & GYROSCOPE
    ================================================================= */
 const player = {
   id: 'p_' + Math.random().toString(36).substr(2, 9),
@@ -112,31 +204,64 @@ const player = {
 let currentRoom = null;
 const remotePlayers = {};
 
-function createPlayerMesh() {
-  const g = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.35, 0.35, 1.4, 8),
-    new THREE.MeshLambertMaterial({ color: 0xff4655 })
-  );
-  body.position.y = 0.7;
-  g.add(body);
+let gyroActive = false;
+let lastGamma = null;
+let lastBeta = null;
+const btnGyro = document.getElementById('btn-gyro');
 
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.22, 8, 8),
-    new THREE.MeshLambertMaterial({ color: 0xece8e1 })
-  );
-  head.position.y = 1.5;
-  g.add(head);
-  return g;
+async function enableGyro() {
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const permission = await DeviceOrientationEvent.requestPermission();
+      if (permission === 'granted') {
+        startGyroListeners();
+      }
+    } catch (e) {
+      console.warn("Gyro permission denied:", e);
+    }
+  } else {
+    startGyroListeners();
+  }
 }
 
+function startGyroListeners() {
+  gyroActive = !gyroActive;
+  btnGyro.innerText = gyroActive ? "GYRO: ON" : "GYRO: OFF";
+  btnGyro.classList.toggle('active', gyroActive);
+  lastGamma = null;
+  lastBeta = null;
+}
+
+window.addEventListener('deviceorientation', (e) => {
+  if (!gyroActive || player.isDead) return;
+
+  const currentGamma = e.gamma;
+  const currentBeta = e.beta;
+
+  if (lastGamma !== null && lastBeta !== null) {
+    const deltaGamma = currentGamma - lastGamma;
+    const deltaBeta = currentBeta - lastBeta;
+
+    if (Math.abs(deltaGamma) < 15 && Math.abs(deltaBeta) < 15) {
+      const gyroSensitivity = 0.008;
+      camYaw -= (deltaGamma * Math.PI / 180) * gyroSensitivity * 60;
+      camPitch -= (deltaBeta * Math.PI / 180) * gyroSensitivity * 60;
+      camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
+    }
+  }
+  lastGamma = currentGamma;
+  lastBeta = currentBeta;
+});
+
+btnGyro.addEventListener('click', enableGyro);
+
 /* =================================================================
-   4. TOUCH CONTROLS & ZOOM PREVENTION
+   6. TOUCH CONTROLS
    ================================================================= */
 let joyTouchId = null;
 let lookTouchId = null;
 let joyStart = { x: 0, y: 0 };
-let joyInput = { x: 0, y: 0 }; // Normalized [-1, 1]
+let joyInput = { x: 0, y: 0 };
 
 let camYaw = 0;
 let camPitch = 0;
@@ -146,24 +271,23 @@ const joyBase = document.getElementById('joystick-base');
 const joyStick = document.getElementById('joystick-stick');
 const maxRadius = 45;
 
-// Completely block native zoom / scroll
 document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
 document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
 document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
 
 window.addEventListener('touchstart', (e) => {
-  // Prevent browser zoom & pull-to-refresh
-  if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
-    e.preventDefault();
+  // Never intercept inputs, buttons, or any touch inside the lobby overlay
+  if (e.target.closest('#lobby') || e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') {
+    return;
   }
+  e.preventDefault();
 
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
     const el = document.elementFromPoint(t.clientX, t.clientY);
-    if (el && el.classList.contains('action-btn')) continue;
+    if (el && (el.classList.contains('action-btn') || el.classList.contains('hud-pill'))) continue;
 
     if (t.clientX < window.innerWidth / 2 && joyTouchId === null) {
-      // Left side = Joystick
       joyTouchId = t.identifier;
       joyStart = { x: t.clientX, y: t.clientY };
       joyBase.style.display = 'block';
@@ -173,7 +297,6 @@ window.addEventListener('touchstart', (e) => {
       joyInput.x = 0;
       joyInput.y = 0;
     } else if (t.clientX >= window.innerWidth / 2 && lookTouchId === null) {
-      // Right side = Look / Aim
       lookTouchId = t.identifier;
       lastLook = { x: t.clientX, y: t.clientY };
     }
@@ -181,7 +304,8 @@ window.addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 window.addEventListener('touchmove', (e) => {
-  e.preventDefault(); // Kills dragging & screen zoom
+  if (e.target.closest('#lobby')) return;
+  e.preventDefault();
 
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
@@ -197,8 +321,6 @@ window.addEventListener('touchmove', (e) => {
       const stickY = Math.sin(angle) * clampedDist;
 
       joyStick.style.transform = `translate(calc(-50% + ${stickX}px), calc(-50% + ${stickY}px))`;
-
-      // Normalize: forward is negative Y in screen space, positive forward in world space
       joyInput.x = stickX / maxRadius;
       joyInput.y = -(stickY / maxRadius);
     } else if (t.identifier === lookTouchId) {
@@ -231,7 +353,7 @@ window.addEventListener('touchend', endTouches);
 window.addEventListener('touchcancel', endTouches);
 
 /* =================================================================
-   5. SHOOTING & RECOIL
+   7. SHOOTING, RECOIL & BULLET TRACERS
    ================================================================= */
 const raycaster = new THREE.Raycaster();
 const ammoDisplay = document.getElementById('ammo-val');
@@ -247,7 +369,6 @@ function triggerFire() {
   player.ammo--;
   ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
 
-  // Recoil impulse
   player.recoilPitch += 0.02;
   player.recoilYaw += (Math.random() - 0.5) * 0.012;
   gunPivot.position.z += 0.04;
@@ -255,11 +376,19 @@ function triggerFire() {
   muzzleFlash.material.visible = true;
   setTimeout(() => { muzzleFlash.material.visible = false; }, 35);
 
+  const muzzleWorld = new THREE.Vector3();
+  muzzleFlash.getWorldPosition(muzzleWorld);
+
   raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-  const targets = Object.values(remotePlayers);
-  const hits = raycaster.intersectObjects(targets, true);
+  
+  const activeTargets = Object.values(remotePlayers).filter(m => !m.isDead);
+  const hits = raycaster.intersectObjects(activeTargets, true);
+
+  let endPoint = new THREE.Vector3();
 
   if (hits.length > 0) {
+    endPoint.copy(hits[0].point);
+
     const hitObj = hits[0].object;
     let targetId = null;
     for (let id in remotePlayers) {
@@ -269,11 +398,15 @@ function triggerFire() {
       const damageRef = ref(db, `rooms/${currentRoom}/players/${targetId}/damage`);
       push(damageRef, { from: player.name, amount: 35 });
     }
+  } else {
+    endPoint = camera.position.clone().add(raycaster.ray.direction.clone().multiplyScalar(60));
   }
+
+  spawnTracer(muzzleWorld, endPoint);
 }
 
 function triggerReload() {
-  if (player.isReloading || player.ammo === player.maxAmmo) return;
+  if (player.isReloading || player.ammo === player.maxAmmo || player.isDead) return;
   player.isReloading = true;
   ammoDisplay.innerText = `RELOAD...`;
 
@@ -297,8 +430,56 @@ document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 /* =================================================================
-   6. MULTIPLAYER ROOMS (FIREBASE)
+   8. MULTIPLAYER ROOMS & DEATH FLOW
    ================================================================= */
+const deathScreen = document.getElementById('death-screen');
+const respawnText = document.getElementById('respawn-text');
+
+function die() {
+  player.hp = 0;
+  player.isDead = true;
+  hpDisplay.innerText = 0;
+  deathScreen.style.display = 'flex';
+
+  if (currentRoom) {
+    const playerRef = ref(db, `rooms/${currentRoom}/players/${player.id}`);
+    update(playerRef, { hp: 0, isDead: true });
+  }
+
+  let countdown = 3;
+  respawnText.innerText = `RESPAWNING IN ${countdown}...`;
+  const timer = setInterval(() => {
+    countdown--;
+    if (countdown > 0) {
+      respawnText.innerText = `RESPAWNING IN ${countdown}...`;
+    } else {
+      clearInterval(timer);
+      respawn();
+    }
+  }, 1000);
+}
+
+function respawn() {
+  player.hp = 100;
+  player.isDead = false;
+  player.ammo = player.maxAmmo;
+  hpDisplay.innerText = player.hp;
+  ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
+  deathScreen.style.display = 'none';
+
+  camera.position.set((Math.random() - 0.5) * 25, 1.6, (Math.random() - 0.5) * 25);
+
+  if (currentRoom) {
+    const playerRef = ref(db, `rooms/${currentRoom}/players/${player.id}`);
+    update(playerRef, { 
+      hp: 100, 
+      isDead: false,
+      x: camera.position.x, 
+      z: camera.position.z 
+    });
+  }
+}
+
 function joinRoom(roomId, name) {
   currentRoom = roomId;
   player.name = name || 'Agent';
@@ -313,24 +494,38 @@ function joinRoom(roomId, name) {
     y: 1.6,
     z: 0,
     yaw: 0,
-    hp: 100
+    hp: 100,
+    isDead: false
   });
 
   onDisconnect(playerRef).remove();
 
+  // Remote player synchronization
   const roomPlayersRef = ref(db, `rooms/${roomId}/players`);
   onValue(roomPlayersRef, (snapshot) => {
     const list = snapshot.val() || {};
     for (let id in list) {
       if (id === player.id) continue;
+      const data = list[id];
+
       if (!remotePlayers[id]) {
-        const mesh = createPlayerMesh();
+        const mesh = createPlayerMesh(data.name);
         scene.add(mesh);
         remotePlayers[id] = mesh;
       }
-      const data = list[id];
-      remotePlayers[id].position.lerp(new THREE.Vector3(data.x, 0, data.z), 0.35);
-      remotePlayers[id].rotation.y = data.yaw;
+
+      const pMesh = remotePlayers[id];
+      pMesh.position.lerp(new THREE.Vector3(data.x, 0, data.z), 0.35);
+      pMesh.rotation.y = data.yaw;
+
+      pMesh.isDead = !!data.isDead;
+      if (pMesh.isDead) {
+        pMesh.modelRoot.rotation.z = THREE.MathUtils.lerp(pMesh.modelRoot.rotation.z, -Math.PI / 2, 0.2);
+        pMesh.modelRoot.position.y = THREE.MathUtils.lerp(pMesh.modelRoot.position.y, 0.2, 0.2);
+      } else {
+        pMesh.modelRoot.rotation.z = THREE.MathUtils.lerp(pMesh.modelRoot.rotation.z, 0, 0.2);
+        pMesh.modelRoot.position.y = THREE.MathUtils.lerp(pMesh.modelRoot.position.y, 0, 0.2);
+      }
     }
 
     for (let id in remotePlayers) {
@@ -341,16 +536,19 @@ function joinRoom(roomId, name) {
     }
   });
 
+  // Damage listener
   const myDamageRef = ref(db, `rooms/${roomId}/players/${player.id}/damage`);
   onChildAdded(myDamageRef, (snap) => {
     const hit = snap.val();
     remove(snap.ref);
+    if (player.isDead) return;
+
     player.hp -= hit.amount;
     hpDisplay.innerText = Math.max(0, player.hp);
-    if (player.hp <= 0 && !player.isDead) {
-      player.isDead = true;
+
+    if (player.hp <= 0) {
       addKillFeed(`${hit.from} eliminated ${player.name}`);
-      setTimeout(respawn, 2500);
+      die();
     }
   });
 }
@@ -364,25 +562,33 @@ function addKillFeed(msg) {
   setTimeout(() => item.remove(), 3500);
 }
 
-function respawn() {
-  player.hp = 100;
-  player.isDead = false;
-  hpDisplay.innerText = player.hp;
-  camera.position.set((Math.random() - 0.5) * 20, 1.6, (Math.random() - 0.5) * 20);
-}
-
-document.getElementById('btn-join').addEventListener('click', () => {
+function handleJoinAction(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
   const name = document.getElementById('player-name').value.trim() || 'Agent';
   const room = document.getElementById('room-input').value.trim().toUpperCase() || 'MAIN';
-  joinRoom(room, name);
-});
+  
+  try {
+    joinRoom(room, name);
+  } catch (err) {
+    console.error("Firebase Room Join Error:", err);
+    document.getElementById('lobby').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
+  }
+}
+
+const joinBtn = document.getElementById('btn-join');
+joinBtn.addEventListener('touchend', handleJoinAction, { passive: false });
+joinBtn.addEventListener('click', handleJoinAction);
 
 /* =================================================================
-   7. GAME LOOP & MOVEMENT MATH
+   9. MAIN ENGINE LOOP
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
-const moveSpeed = 7.0; // Units per second
+const moveSpeed = 7.0;
 
 function animate(time) {
   requestAnimationFrame(animate);
@@ -390,19 +596,16 @@ function animate(time) {
   const dt = Math.min((time - lastTime) / 1000, 0.1);
   lastTime = time;
 
-  // Recoil spring recovery
+  updateTracers(dt);
+
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
   gunPivot.position.z = THREE.MathUtils.lerp(gunPivot.position.z, 0, 0.2);
 
-  // Apply camera orientation
   camera.rotation.y = camYaw + player.recoilYaw;
   camera.rotation.x = camPitch + player.recoilPitch;
 
-  // Real FPS Movement:
-  // Forward vector is (-sin(yaw), -cos(yaw))
-  // Right strafe vector is (cos(yaw), -sin(yaw))
-  if (Math.hypot(joyInput.x, joyInput.y) > 0.05) {
+  if (!player.isDead && Math.hypot(joyInput.x, joyInput.y) > 0.05) {
     const sinY = Math.sin(camYaw);
     const cosY = Math.cos(camYaw);
 
@@ -415,12 +618,10 @@ function animate(time) {
     camera.position.x += (fwdX + strafeX) * moveSpeed * dt;
     camera.position.z += (fwdZ + strafeZ) * moveSpeed * dt;
 
-    // Boundaries
     camera.position.x = Math.max(-38, Math.min(38, camera.position.x));
     camera.position.z = Math.max(-38, Math.min(38, camera.position.z));
   }
 
-  // Network position throttle (20 updates/sec)
   if (currentRoom && time - lastNetworkSync > 50) {
     lastNetworkSync = time;
     const playerRef = ref(db, `rooms/${currentRoom}/players/${player.id}`);
@@ -441,3 +642,4 @@ window.addEventListener('resize', () => {
 });
 
 animate(performance.now());
+  
