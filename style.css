@@ -126,7 +126,7 @@ button.btn {
 }
 button.btn:active { background: #d33240; }
 
-/* HUD */
+/* IN-GAME HUD */
 #hud {
   position: absolute;
   inset: 0;
@@ -137,12 +137,39 @@ button.btn:active { background: #d33240; }
 
 .top-bar {
   position: absolute;
-  top: 15px;
+  top: 12px;
   right: 15px;
   left: 15px;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* SENSITIVITY ADJUSTER */
+.sens-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 25, 35, 0.85);
+  border: 1px solid #44566c;
+  padding: 6px 14px;
+  border-radius: 20px;
+  pointer-events: auto !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  touch-action: auto !important;
+}
+#sens-label {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #00ffcc;
+  font-weight: bold;
+  white-space: nowrap;
+}
+#sens-slider {
+  width: 75px;
+  accent-color: #ff4655;
+  cursor: pointer;
 }
 
 .hud-pill {
@@ -152,13 +179,12 @@ button.btn:active { background: #d33240; }
   font-family: monospace;
   font-size: 0.8rem;
   font-weight: bold;
-  padding: 8px 16px;
+  padding: 8px 14px;
   border-radius: 20px;
   pointer-events: auto !important;
   cursor: pointer;
   touch-action: auto !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  z-index: 35;
 }
 .hud-pill.active {
   border-color: #00ffcc;
@@ -242,7 +268,7 @@ button.btn:active { background: #d33240; }
   letter-spacing: 2px;
 }
 
-/* TOUCH CONTROLS */
+/* MOBILE CONTROLS */
 #mobile-controls { display: block; }
 .touch-zone {
   position: absolute;
@@ -292,8 +318,9 @@ button.btn:active { background: #d33240; }
   pointer-events: auto;
   touch-action: none;
 }
+
 #btn-fire {
-  bottom: 50px;
+  bottom: 45px;
   right: 25px;
   width: 75px;
   height: 75px;
@@ -301,11 +328,23 @@ button.btn:active { background: #d33240; }
   font-size: 1.1rem;
 }
 #btn-fire:active { background: #ff4655; }
+
 #btn-reload {
-  bottom: 140px;
+  bottom: 135px;
   right: 35px;
-  width: 50px;
-  height: 50px;
+  width: 52px;
+  height: 52px;
   background: rgba(40, 50, 60, 0.8);
   font-size: 0.85rem;
 }
+
+#btn-jump {
+  bottom: 45px;
+  right: 115px;
+  width: 60px;
+  height: 60px;
+  background: rgba(30, 140, 180, 0.75);
+  font-size: 0.8rem;
+  border-color: #00ffcc;
+}
+#btn-jump:active { background: rgba(0, 255, 204, 0.9); color: #000; }
