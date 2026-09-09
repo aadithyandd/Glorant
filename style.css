@@ -266,7 +266,7 @@ button.btn:active { background: #d33240; }
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 30px;
+  gap: 20px;
   align-items: center;
   background: rgba(15, 25, 35, 0.85);
   padding: 8px 24px;
@@ -275,8 +275,10 @@ button.btn:active { background: #d33240; }
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
 }
 
-.stat-box { font-family: monospace; color: #fff; font-size: 1.3rem; font-weight: bold; }
+.stat-box { font-family: monospace; color: #fff; font-size: 1.2rem; font-weight: bold; }
 .hp-val { color: #00ffcc; }
+.dash-val { color: #00d4ff; }
+.dash-val.cooldown { color: #8899aa; }
 .ammo-val { color: #ffeb3b; }
 
 #killfeed {
@@ -401,3 +403,14 @@ button.btn:active { background: #d33240; }
   border-color: #00ffcc;
 }
 #btn-jump:active { background: rgba(0, 255, 204, 0.9); color: #000; }
+
+#btn-dash {
+  bottom: 115px;
+  right: 105px;
+  width: 55px;
+  height: 55px;
+  background: rgba(0, 180, 220, 0.7);
+  font-size: 0.75rem;
+  border-color: #00d4ff;
+}
+#btn-dash:active { background: #00d4ff; color: #000; }
