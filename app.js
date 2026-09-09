@@ -30,7 +30,7 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 /* =================================================================
-   2. PROCEDURAL SOUND SYNTHESIZER (WEB AUDIO API)
+   2. VALORANT AUDIO ENGINE & 1.wav - 5.wav KILLSTREAKS
    ================================================================= */
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
@@ -44,11 +44,47 @@ function ensureAudio() {
   }
 }
 
+// Pre-buffer 1.wav to 5.wav
+const killAudios = [
+  new Audio('1.wav'),
+  new Audio('2.wav'),
+  new Audio('3.wav'),
+  new Audio('4.wav'),
+  new Audio('5.wav')
+];
+
+let killStreakCount = 0;
+let lastKillTime = 0;
+
+function playValorantKillAudio() {
+  const now = Date.now();
+  // Reset streak if more than 20 seconds passed since last kill
+  if (now - lastKillTime > 20000) {
+    killStreakCount = 0;
+  }
+  lastKillTime = now;
+  killStreakCount = Math.min(5, killStreakCount + 1);
+
+  const audioIndex = killStreakCount - 1;
+  const audio = killAudios[audioIndex];
+
+  if (audio) {
+    audio.currentTime = 0;
+    audio.play().catch(() => {
+      // Fallback synthesizer in case files aren't uploaded yet
+      SoundFx.proceduralKillTone(killStreakCount);
+    });
+  } else {
+    SoundFx.proceduralKillTone(killStreakCount);
+  }
+
+  return killStreakCount;
+}
+
 const SoundFx = {
   shoot() {
     ensureAudio();
     const t = audioCtx.currentTime;
-    // Punchy gunshot impulse
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = 'sawtooth';
@@ -208,24 +244,25 @@ const SoundFx = {
     osc.stop(t + 0.18);
   },
 
-  killBell() {
+  proceduralKillTone(level) {
     ensureAudio();
     const t = audioCtx.currentTime;
-    const notes = [440, 660, 880];
-    notes.forEach((freq, idx) => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, t + idx * 0.08);
+    const baseFreqs = [330, 415, 495, 620, 830];
+    const freq = baseFreqs[Math.min(4, level - 1)];
 
-      gain.gain.setValueAtTime(0.3, t + idx * 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.08 + 0.4);
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(freq * 1.5, t + 0.35);
 
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start(t + idx * 0.08);
-      osc.stop(t + idx * 0.08 + 0.4);
-    });
+    gain.gain.setValueAtTime(0.4, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.4);
   }
 };
 
@@ -261,7 +298,7 @@ sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
 /* =================================================================
-   4. WEAPON RIGS, ADS SCOPE & SMOOTH ANIMATIONS
+   4. WEAPON RIGS, TIGHT ADS SCOPE & SMOOTH ANIMATIONS
    ================================================================= */
 const gunPivot = new THREE.Group();
 gunPivot.frustumCulled = false;
@@ -314,7 +351,7 @@ knifeGroup.add(handle);
 knifeGroup.visible = false;
 gunPivot.add(knifeGroup);
 
-// Weapon state & ADS
+// Weapon state & Valorant Scope (28deg FOV)
 let currentWeapon = 'rifle';
 let isScoped = false;
 const scopeOverlay = document.getElementById('scope-overlay');
@@ -326,17 +363,15 @@ function toggleScope() {
   if (currentWeapon !== 'rifle' || player.isDead) return;
   isScoped = !isScoped;
   scopeOverlay.classList.toggle('active', isScoped);
-  crosshairEl.style.transform = isScoped ? 'translate(-50%, -50%) scale(0.8)' : 'translate(-50%, -50%) scale(1)';
+  crosshairEl.style.transform = isScoped ? 'translate(-50%, -50%) scale(0.65)' : 'translate(-50%, -50%) scale(1)';
 }
 
 function setWeapon(type) {
   if (player.isReloading || player.isDead || currentWeapon === type) return;
   currentWeapon = type;
 
-  // Unscope if switching from rifle
   if (isScoped) toggleScope();
 
-  // Smooth draw animation
   gunPivot.position.y = -0.35;
   SoundFx.knifeSlash();
 
@@ -375,11 +410,10 @@ window.addEventListener('wheel', (e) => {
   if (platformMode === 'pc') toggleWeapon();
 }, { passive: true });
 
-// Prevent context menu on right click for PC scope
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 /* =================================================================
-   5. OPEN-WORLD ARENA & SOLID WALL COLLIDERS
+   5. OPEN-WORLD ARENA & WALL COLLIDERS
    ================================================================= */
 const colliders = [];
 const obstacleMeshes = [];
@@ -622,15 +656,19 @@ let dashDuration = 0;
 
 const dashDisplay = document.getElementById('dash-val');
 const killBanner = document.getElementById('kill-banner');
+const killBannerText = document.getElementById('kill-banner-text');
 let killBannerTimeout = null;
 
 function triggerKillBanner() {
-  SoundFx.killBell();
+  const streak = playValorantKillAudio();
+  const killLabels = ['KILL 1', 'DOUBLE KILL', 'TRIPLE KILL', 'QUADRA KILL', 'ACE!'];
+  killBannerText.innerText = killLabels[streak - 1] || 'KILL';
+
   killBanner.classList.add('show');
   clearTimeout(killBannerTimeout);
   killBannerTimeout = setTimeout(() => {
     killBanner.classList.remove('show');
-  }, 1600);
+  }, 1800);
 }
 
 const player = {
@@ -676,7 +714,7 @@ function triggerDash() {
   camera.fov = 82;
   camera.updateProjectionMatrix();
   setTimeout(() => {
-    camera.fov = isScoped ? 45 : 72;
+    camera.fov = isScoped ? 28 : 72;
     camera.updateProjectionMatrix();
   }, 220);
 }
@@ -808,7 +846,7 @@ canvas.addEventListener('click', () => {
 
 window.addEventListener('mousemove', (e) => {
   if (platformMode === 'pc' && document.pointerLockElement === canvas && !player.isDead) {
-    const scopeFactor = isScoped ? 0.5 : 1.0;
+    const scopeFactor = isScoped ? 0.35 : 1.0;
     const mouseSens = 0.0022 * userSensitivity * scopeFactor;
     camYaw -= e.movementX * mouseSens;
     camPitch -= e.movementY * mouseSens;
@@ -821,7 +859,6 @@ window.addEventListener('mousedown', (e) => {
     if (e.button === 0) {
       triggerFire();
     } else if (e.button === 2) {
-      // Right Click Scope
       toggleScope();
     }
   }
@@ -884,7 +921,7 @@ window.addEventListener('touchmove', (e) => {
       const dx = t.clientX - lastLook.x;
       const dy = t.clientY - lastLook.y;
       lastLook = { x: t.clientX, y: t.clientY };
-      const scopeFactor = isScoped ? 0.5 : 1.0;
+      const scopeFactor = isScoped ? 0.35 : 1.0;
       camYaw -= dx * 0.0038 * userSensitivity * scopeFactor;
       camPitch -= dy * 0.0038 * userSensitivity * scopeFactor;
       camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
@@ -947,7 +984,7 @@ window.addEventListener('deviceorientation', (e) => {
     const dg = e.gamma - lastGamma;
     const db = e.beta - lastBeta;
     if (Math.abs(dg) < 15 && Math.abs(db) < 15) {
-      const scopeFactor = isScoped ? 0.5 : 1.0;
+      const scopeFactor = isScoped ? 0.35 : 1.0;
       camYaw -= (dg * Math.PI / 180) * 0.45 * userSensitivity * scopeFactor;
       camPitch -= (db * Math.PI / 180) * 0.45 * userSensitivity * scopeFactor;
       camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
@@ -992,10 +1029,8 @@ function triggerFire() {
   if (player.isReloading || player.isDead) return;
 
   if (currentWeapon === 'knife') {
-    // KNIFE ATTACK (85 DAMAGE)
     SoundFx.knifeSlash();
 
-    // Smooth slash animation
     knifeGroup.rotation.y = -Math.PI / 2.5;
     knifeGroup.rotation.x = Math.PI / 6;
     gunPivot.position.z += 0.12;
@@ -1038,8 +1073,7 @@ function triggerFire() {
   ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
   SoundFx.shoot();
 
-  // Scope reduces recoil
-  const recoilFactor = isScoped ? 0.45 : 1.0;
+  const recoilFactor = isScoped ? 0.35 : 1.0;
   player.recoilPitch += 0.022 * recoilFactor;
   player.recoilYaw += (Math.random() - 0.5) * 0.014 * recoilFactor;
   gunPivot.position.z += 0.04;
@@ -1337,20 +1371,20 @@ function animate(time) {
   updateDashCooldownUI(time);
   updatePlayerVisibilities();
 
-  // Smooth ADS Zoom
-  const targetFov = isScoped ? 45 : 72;
-  camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.18);
+  // Smooth ADS Zoom (28deg FOV for tight zoom)
+  const targetFov = isScoped ? 28 : 72;
+  camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.22);
   camera.updateProjectionMatrix();
 
   // Recoil recovery
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
 
-  // Aim alignment: Center weapon when scoped, offset right when hipfiring
+  // Aim alignment: center weapon when scoped
   const targetGunX = isScoped ? 0.0 : 0.0;
   const targetGunY = isScoped ? 0.06 : 0.0;
-  gunPivot.position.x = THREE.MathUtils.lerp(gunPivot.position.x, targetGunX, 0.2);
-  gunPivot.position.y = THREE.MathUtils.lerp(gunPivot.position.y, targetGunY, 0.2);
+  gunPivot.position.x = THREE.MathUtils.lerp(gunPivot.position.x, targetGunX, 0.25);
+  gunPivot.position.y = THREE.MathUtils.lerp(gunPivot.position.y, targetGunY, 0.25);
   gunPivot.position.z = THREE.MathUtils.lerp(gunPivot.position.z, 0, 0.2);
 
   camera.rotation.y = camYaw + player.recoilYaw;
@@ -1372,11 +1406,11 @@ function animate(time) {
 
   const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05;
 
-  // Smooth Weapon Bobbing & Footsteps
+  // Weapon sway & footstep rhythms
   if (isMoving && player.isGrounded && !player.isDead) {
-    const bobFactor = isScoped ? 0.001 : 0.005;
+    const bobFactor = isScoped ? 0.0008 : 0.004;
     gunPivot.position.y += Math.sin(time * 0.012) * bobFactor;
-    gunPivot.position.x += Math.cos(time * 0.006) * (bobFactor * 0.7);
+    gunPivot.position.x += Math.cos(time * 0.006) * (bobFactor * 0.6);
 
     footstepTimer += dt;
     if (footstepTimer > 0.38) {
@@ -1384,12 +1418,11 @@ function animate(time) {
       footstepTimer = 0;
     }
   } else {
-    // Subtle idle breathing
     gunPivot.position.y += Math.sin(time * 0.003) * 0.0004;
     footstepTimer = 0.3;
   }
 
-  // Dash or Walk
+  // Movement & Dash
   if (dashDuration > 0) {
     dashDuration -= dt;
     const dX = THREE.MathUtils.clamp(camera.position.x + dashVelocity.x * dt, -MAP_BOUND, MAP_BOUND);
@@ -1406,7 +1439,7 @@ function animate(time) {
     const strafeX = cosY * inputX;
     const strafeZ = -sinY * inputX;
 
-    const currentSpeed = isScoped ? moveSpeed * 0.65 : moveSpeed;
+    const currentSpeed = isScoped ? moveSpeed * 0.55 : moveSpeed;
     const deltaX = (fwdX + strafeX) * currentSpeed * dt;
     const deltaZ = (fwdZ + strafeZ) * currentSpeed * dt;
 
@@ -1432,7 +1465,6 @@ function animate(time) {
       player.vy = 0;
       player.isGrounded = true;
 
-      // Landing sound effect
       if (wasInAir) SoundFx.land();
     } else {
       player.isGrounded = false;
