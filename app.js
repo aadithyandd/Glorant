@@ -30,21 +30,21 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 /* =================================================================
-   2. VALORANT AUDIO ENGINE & 1.wav - 5.wav KILLSTREAKS
+   2. AUDIO PLAYER (dash.wav, shoot.wav, walk.wav, 1-5.wav)
    ================================================================= */
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
 
 function ensureAudio() {
-  if (!audioCtx) {
-    audioCtx = new AudioContextClass();
-  }
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
-  }
+  if (!audioCtx) audioCtx = new AudioContextClass();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
-// Pre-buffer 1.wav to 5.wav
+// User-supplied custom audio files
+const audioDash = new Audio('dash.wav');
+const audioShoot = new Audio('shoot.wav');
+const audioWalk = new Audio('walk.wav');
+
 const killAudios = [
   new Audio('1.wav'),
   new Audio('2.wav'),
@@ -56,48 +56,79 @@ const killAudios = [
 let killStreakCount = 0;
 let lastKillTime = 0;
 
+function playSound(audioObj, fallbackFn) {
+  ensureAudio();
+  if (audioObj) {
+    audioObj.currentTime = 0;
+    audioObj.play().catch(() => {
+      if (fallbackFn) fallbackFn();
+    });
+  } else if (fallbackFn) {
+    fallbackFn();
+  }
+}
+
 function playValorantKillAudio() {
   const now = Date.now();
-  // Reset streak if more than 20 seconds passed since last kill
-  if (now - lastKillTime > 20000) {
-    killStreakCount = 0;
-  }
+  if (now - lastKillTime > 20000) killStreakCount = 0;
   lastKillTime = now;
   killStreakCount = Math.min(5, killStreakCount + 1);
 
-  const audioIndex = killStreakCount - 1;
-  const audio = killAudios[audioIndex];
-
-  if (audio) {
-    audio.currentTime = 0;
-    audio.play().catch(() => {
-      // Fallback synthesizer in case files aren't uploaded yet
-      SoundFx.proceduralKillTone(killStreakCount);
-    });
-  } else {
-    SoundFx.proceduralKillTone(killStreakCount);
-  }
-
+  const audio = killAudios[killStreakCount - 1];
+  playSound(audio, () => SoundFx.proceduralKillTone(killStreakCount));
   return killStreakCount;
 }
 
 const SoundFx = {
   shoot() {
-    ensureAudio();
-    const t = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(260, t);
-    osc.frequency.exponentialRampToValueAtTime(40, t + 0.16);
+    playSound(audioShoot, () => {
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(260, t);
+      osc.frequency.exponentialRampToValueAtTime(40, t + 0.16);
+      gain.gain.setValueAtTime(0.4, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.16);
+    });
+  },
 
-    gain.gain.setValueAtTime(0.4, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+  dash() {
+    playSound(audioDash, () => {
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(450, t);
+      osc.frequency.exponentialRampToValueAtTime(80, t + 0.2);
+      gain.gain.setValueAtTime(0.35, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.2);
+    });
+  },
 
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(t);
-    osc.stop(t + 0.16);
+  footstep() {
+    playSound(audioWalk, () => {
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(75, t);
+      osc.frequency.exponentialRampToValueAtTime(25, t + 0.06);
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.06);
+    });
   },
 
   knifeSlash() {
@@ -108,10 +139,8 @@ const SoundFx = {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(650, t);
     osc.frequency.exponentialRampToValueAtTime(120, t + 0.12);
-
     gain.gain.setValueAtTime(0.25, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(t);
@@ -126,10 +155,8 @@ const SoundFx = {
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(140, t);
     osc.frequency.exponentialRampToValueAtTime(30, t + 0.2);
-
     gain.gain.setValueAtTime(0.6, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(t);
@@ -144,10 +171,8 @@ const SoundFx = {
     osc.type = 'square';
     osc.frequency.setValueAtTime(350, t);
     osc.frequency.setValueAtTime(480, t + 0.1);
-
     gain.gain.setValueAtTime(0.12, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(t);
@@ -162,10 +187,8 @@ const SoundFx = {
     osc.type = 'sine';
     osc.frequency.setValueAtTime(160, t);
     osc.frequency.exponentialRampToValueAtTime(320, t + 0.14);
-
     gain.gain.setValueAtTime(0.2, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
-
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(t);
@@ -180,50 +203,12 @@ const SoundFx = {
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(90, t);
     osc.frequency.exponentialRampToValueAtTime(30, t + 0.1);
-
     gain.gain.setValueAtTime(0.3, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(t);
     osc.stop(t + 0.1);
-  },
-
-  dash() {
-    ensureAudio();
-    const t = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(450, t);
-    osc.frequency.exponentialRampToValueAtTime(80, t + 0.2);
-
-    gain.gain.setValueAtTime(0.35, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(t);
-    osc.stop(t + 0.2);
-  },
-
-  footstep() {
-    ensureAudio();
-    const t = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(75, t);
-    osc.frequency.exponentialRampToValueAtTime(25, t + 0.06);
-
-    gain.gain.setValueAtTime(0.12, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
-
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(t);
-    osc.stop(t + 0.06);
   },
 
   damage() {
@@ -234,10 +219,8 @@ const SoundFx = {
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(140, t);
     osc.frequency.exponentialRampToValueAtTime(50, t + 0.18);
-
     gain.gain.setValueAtTime(0.4, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(t);
@@ -249,16 +232,13 @@ const SoundFx = {
     const t = audioCtx.currentTime;
     const baseFreqs = [330, 415, 495, 620, 830];
     const freq = baseFreqs[Math.min(4, level - 1)];
-
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, t);
     osc.frequency.exponentialRampToValueAtTime(freq * 1.5, t + 0.35);
-
     gain.gain.setValueAtTime(0.4, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(t);
@@ -298,7 +278,7 @@ sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
 /* =================================================================
-   4. WEAPON RIGS, TIGHT ADS SCOPE & SMOOTH ANIMATIONS
+   4. WEAPON RIGS & REAVER KARAMBIT (.GLB)
    ================================================================= */
 const gunPivot = new THREE.Group();
 gunPivot.frustumCulled = false;
@@ -330,28 +310,41 @@ muzzleFlash.position.set(0.2, -0.2, -1.05);
 rifleGroup.add(muzzleFlash);
 gunPivot.add(rifleGroup);
 
-// KNIFE
-const knifeGroup = new THREE.Group();
-const bladeMat = new THREE.MeshStandardMaterial({ color: 0xdde6ed, metalness: 0.9, roughness: 0.2 });
-const handleMat = new THREE.MeshLambertMaterial({ color: 0x1a2128 });
-const guardMat = new THREE.MeshLambertMaterial({ color: 0xff4655 });
+// REAVER KARAMBIT HOLDER
+const karambitHolder = new THREE.Group();
+karambitHolder.position.set(0.2, -0.2, -0.42);
+karambitHolder.visible = false;
+gunPivot.add(karambitHolder);
 
-const blade = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.08, 0.3), bladeMat);
-blade.position.set(0.18, -0.16, -0.5);
-knifeGroup.add(blade);
+// Procedural fallback karambit mesh
+const fallbackBlade = new THREE.Mesh(
+  new THREE.TorusGeometry(0.12, 0.025, 8, 24, Math.PI),
+  new THREE.MeshStandardMaterial({ color: 0x7722bb, metalness: 0.9, roughness: 0.2 })
+);
+fallbackBlade.rotation.z = Math.PI / 2;
+karambitHolder.add(fallbackBlade);
 
-const guard = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.03), guardMat);
-guard.position.set(0.18, -0.16, -0.34);
-knifeGroup.add(guard);
+// Load reaver_karambit.glb
+if (typeof THREE.GLTFLoader !== 'undefined') {
+  const kLoader = new THREE.GLTFLoader();
+  kLoader.load(
+    'reaver_karambit.glb',
+    (gltf) => {
+      const kModel = gltf.scene;
+      kModel.scale.set(0.18, 0.18, 0.18);
+      kModel.rotation.set(0, -Math.PI / 2, 0);
+      karambitHolder.remove(fallbackBlade);
+      karambitHolder.add(kModel);
+    },
+    undefined,
+    () => { console.log("Using procedural Reaver Karambit model."); }
+  );
+}
 
-const handle = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.06, 0.16), handleMat);
-handle.position.set(0.18, -0.16, -0.24);
-knifeGroup.add(handle);
+// Karambit Spin State
+let isSpinningKarambit = false;
+let karambitSpinAngle = 0;
 
-knifeGroup.visible = false;
-gunPivot.add(knifeGroup);
-
-// Weapon state & Valorant Scope (28deg FOV)
 let currentWeapon = 'rifle';
 let isScoped = false;
 const scopeOverlay = document.getElementById('scope-overlay');
@@ -371,7 +364,6 @@ function setWeapon(type) {
   currentWeapon = type;
 
   if (isScoped) toggleScope();
-
   gunPivot.position.y = -0.35;
   SoundFx.knifeSlash();
 
@@ -379,14 +371,14 @@ function setWeapon(type) {
 
   if (type === 'rifle') {
     rifleGroup.visible = true;
-    knifeGroup.visible = false;
+    karambitHolder.visible = false;
     slotDisplay.innerText = 'RIFLE';
     btnSwapWeapon.innerText = 'WEAPON: RIFLE';
     ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
   } else {
     rifleGroup.visible = false;
-    knifeGroup.visible = true;
-    slotDisplay.innerText = 'KNIFE';
+    karambitHolder.visible = true;
+    slotDisplay.innerText = 'KARAMBIT';
     btnSwapWeapon.innerText = 'WEAPON: KNIFE';
     ammoDisplay.innerText = 'MELEE';
   }
@@ -413,7 +405,7 @@ window.addEventListener('wheel', (e) => {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 /* =================================================================
-   5. OPEN-WORLD ARENA & WALL COLLIDERS
+   5. OPEN-WORLD ARENA & COLLIDERS
    ================================================================= */
 const colliders = [];
 const obstacleMeshes = [];
@@ -637,16 +629,18 @@ function createHighVisEnemy(name) {
 }
 
 /* =================================================================
-   8. INPUTS, DASH, SCOREBOARD & LINE-OF-SIGHT
+   8. INPUTS, SENSITIVITY & PRACTICE BOTS (OFFLINE INFINITE)
    ================================================================= */
 let platformMode = 'mobile';
+let gameMode = 'online'; // 'online' or 'offline'
 let userSensitivity = 1.0;
 
+// Editable down to 0.1
 const sensSlider = document.getElementById('sens-slider');
 const sensLabel = document.getElementById('sens-label');
 sensSlider.addEventListener('input', (e) => {
   userSensitivity = parseFloat(e.target.value);
-  sensLabel.innerText = `SENS: ${userSensitivity.toFixed(1)}x`;
+  sensLabel.innerText = `SENS: ${userSensitivity.toFixed(2)}x`;
 });
 
 const DASH_COOLDOWN = 10000;
@@ -690,11 +684,85 @@ const player = {
 
 let currentRoom = null;
 const remotePlayers = {};
+const offlineBots = []; // Array of bot objects
 let allLobbyScores = {};
 let recentDamageDealers = [];
 
 let camYaw = 0;
 let camPitch = 0;
+
+// Practice bots spawner
+function spawnOfflineBot(id) {
+  const name = `BOT ${id + 1}`;
+  const mesh = createHighVisEnemy(name);
+  scene.add(mesh);
+
+  const spawnRadius = 25 + Math.random() * 45;
+  const spawnAngle = Math.random() * Math.PI * 2;
+  const botObj = {
+    id: `bot_${id}`,
+    name: name,
+    mesh: mesh,
+    hp: 100,
+    x: Math.cos(spawnAngle) * spawnRadius,
+    z: Math.sin(spawnAngle) * spawnRadius,
+    yaw: Math.random() * Math.PI * 2,
+    vx: (Math.random() - 0.5) * 3,
+    vz: (Math.random() - 0.5) * 3,
+    changeDirTimer: 0,
+    isDead: false
+  };
+
+  mesh.position.set(botObj.x, 0, botObj.z);
+  offlineBots.push(botObj);
+}
+
+function initOfflineMode() {
+  for (let i = 0; i < 7; i++) {
+    spawnOfflineBot(i);
+  }
+}
+
+function updateOfflineBots(dt) {
+  for (let bot of offlineBots) {
+    if (bot.isDead) continue;
+
+    bot.changeDirTimer -= dt;
+    if (bot.changeDirTimer <= 0) {
+      bot.changeDirTimer = 2 + Math.random() * 3;
+      const moveAngle = Math.random() * Math.PI * 2;
+      const speed = 2.5 + Math.random() * 2.5;
+      bot.vx = Math.cos(moveAngle) * speed;
+      bot.vz = Math.sin(moveAngle) * speed;
+      bot.yaw = -moveAngle + Math.PI / 2;
+    }
+
+    const nextX = THREE.MathUtils.clamp(bot.x + bot.vx * dt, -MAP_BOUND, MAP_BOUND);
+    const nextZ = THREE.MathUtils.clamp(bot.z + bot.vz * dt, -MAP_BOUND, MAP_BOUND);
+
+    if (!checkCollision(nextX, bot.z)) bot.x = nextX;
+    if (!checkCollision(bot.x, nextZ)) bot.z = nextZ;
+
+    bot.mesh.position.set(bot.x, 0, bot.z);
+    bot.mesh.rotation.y = bot.yaw;
+  }
+}
+
+function respawnBot(bot) {
+  setTimeout(() => {
+    bot.hp = 100;
+    bot.isDead = false;
+    bot.mesh.isDead = false;
+    bot.mesh.modelRoot.rotation.z = 0;
+    bot.mesh.modelRoot.position.y = 0;
+
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 25 + Math.random() * 40;
+    bot.x = camera.position.x + Math.cos(angle) * dist;
+    bot.z = camera.position.z + Math.sin(angle) * dist;
+    bot.mesh.position.set(bot.x, 0, bot.z);
+  }, 3500);
+}
 
 function triggerDash() {
   const now = performance.now();
@@ -733,10 +801,11 @@ function updateDashCooldownUI(now) {
 const losRay = new THREE.Raycaster();
 function updatePlayerVisibilities() {
   const eyePos = camera.position;
-  for (let id in remotePlayers) {
-    const pMesh = remotePlayers[id];
+  const targetPool = gameMode === 'offline' ? offlineBots.map(b => b.mesh) : Object.values(remotePlayers);
+
+  for (let pMesh of targetPool) {
     if (pMesh.isDead) {
-      pMesh.nameSprite.visible = false;
+      if (pMesh.nameSprite) pMesh.nameSprite.visible = false;
       continue;
     }
 
@@ -748,10 +817,21 @@ function updatePlayerVisibilities() {
     losRay.far = distToTarget;
 
     const wallIntersects = losRay.intersectObjects(obstacleMeshes, true);
-    pMesh.nameSprite.visible = wallIntersects.length === 0;
+    if (pMesh.nameSprite) pMesh.nameSprite.visible = wallIntersects.length === 0;
   }
 }
 
+// Mode Selector (Online / Offline Bots)
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    gameMode = btn.getAttribute('data-mode');
+  });
+});
+
+// Platform Selector
 document.querySelectorAll('.plat-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -761,6 +841,7 @@ document.querySelectorAll('.plat-btn').forEach(btn => {
   });
 });
 
+// Scoreboard
 const sbModal = document.getElementById('scoreboard-modal');
 const sbRows = document.getElementById('sb-rows');
 let isScoreboardOpen = false;
@@ -791,6 +872,7 @@ document.getElementById('btn-tab-toggle').addEventListener('click', (e) => {
   toggleScoreboard();
 });
 
+// PC Keyboard
 const keys = { forward: false, backward: false, left: false, right: false };
 
 function triggerJump() {
@@ -954,7 +1036,7 @@ document.getElementById('btn-dash').addEventListener('touchstart', (e) => {
   triggerDash();
 }, { passive: false });
 
-// Gyroscope
+// Mobile Gyroscope
 let gyroActive = false;
 let lastGamma = null;
 let lastBeta = null;
@@ -1007,7 +1089,7 @@ function checkCollision(targetX, targetZ) {
 }
 
 /* =================================================================
-   9. ATTACK SYSTEM (KNIFE DAMAGE & RIFLE HITSCAN)
+   9. ATTACK SYSTEM (REAVER SPIN FLOURISH & DAMAGE)
    ================================================================= */
 const vignetteEl = document.getElementById('damage-vignette');
 const raycaster = new THREE.Raycaster();
@@ -1029,19 +1111,37 @@ function triggerFire() {
   if (player.isReloading || player.isDead) return;
 
   if (currentWeapon === 'knife') {
+    // REAVER KARAMBIT SMOOTH 360 SPIN
+    isSpinningKarambit = true;
+    karambitSpinAngle = 0;
     SoundFx.knifeSlash();
 
-    knifeGroup.rotation.y = -Math.PI / 2.5;
-    knifeGroup.rotation.x = Math.PI / 6;
-    gunPivot.position.z += 0.12;
-
-    setTimeout(() => {
-      knifeGroup.rotation.y = 0;
-      knifeGroup.rotation.x = 0;
-      gunPivot.position.z = 0;
-    }, 180);
-
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+    if (gameMode === 'offline') {
+      // Offline Bot Hit Check
+      const activeBotMeshes = offlineBots.filter(b => !b.isDead).map(b => b.mesh);
+      const hits = raycaster.intersectObjects(activeBotMeshes, true);
+      if (hits.length > 0 && hits[0].distance <= 3.5) {
+        SoundFx.knifeHit();
+        const hitBot = offlineBots.find(b => b.mesh.getObjectById(hits[0].object.id));
+        if (hitBot && !hitBot.isDead) {
+          hitBot.hp -= 85;
+          if (hitBot.hp <= 0) {
+            hitBot.isDead = true;
+            hitBot.mesh.isDead = true;
+            hitBot.mesh.modelRoot.rotation.z = -Math.PI / 2;
+            player.kills++;
+            triggerKillBanner();
+            addKillFeed(`${player.name} knifed ${hitBot.name}`);
+            respawnBot(hitBot);
+          }
+        }
+      }
+      return;
+    }
+
+    // Online Hit Check
     const activeTargets = Object.values(remotePlayers).filter(m => !m.isDead);
     const hits = raycaster.intersectObjects(activeTargets, true);
 
@@ -1086,6 +1186,41 @@ function triggerFire() {
 
   raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
+  if (gameMode === 'offline') {
+    // Offline Hitscan
+    const activeBotMeshes = offlineBots.filter(b => !b.isDead).map(b => b.mesh);
+    const botHits = raycaster.intersectObjects(activeBotMeshes, true);
+    const wallHits = raycaster.intersectObjects(obstacleMeshes, true);
+
+    let endPoint = new THREE.Vector3();
+    let firstWallDist = wallHits.length > 0 ? wallHits[0].distance : Infinity;
+    let firstBotDist = botHits.length > 0 ? botHits[0].distance : Infinity;
+
+    if (firstWallDist < firstBotDist) {
+      endPoint.copy(wallHits[0].point);
+    } else if (botHits.length > 0) {
+      endPoint.copy(botHits[0].point);
+      const hitBot = offlineBots.find(b => b.mesh.getObjectById(botHits[0].object.id));
+      if (hitBot && !hitBot.isDead) {
+        hitBot.hp -= 35;
+        if (hitBot.hp <= 0) {
+          hitBot.isDead = true;
+          hitBot.mesh.isDead = true;
+          hitBot.mesh.modelRoot.rotation.z = -Math.PI / 2;
+          player.kills++;
+          triggerKillBanner();
+          addKillFeed(`${player.name} eliminated ${hitBot.name}`);
+          respawnBot(hitBot);
+        }
+      }
+    } else {
+      endPoint = camera.position.clone().add(raycaster.ray.direction.clone().multiplyScalar(90));
+    }
+    spawnTracer(muzzleWorld, endPoint);
+    return;
+  }
+
+  // Online Multiplayer Hitscan
   const activeTargets = Object.values(remotePlayers).filter(m => !m.isDead);
   const playerHits = raycaster.intersectObjects(activeTargets, true);
   const wallHits = raycaster.intersectObjects(obstacleMeshes, true);
@@ -1142,7 +1277,7 @@ document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 /* =================================================================
-   10. MULTIPLAYER ROOMS, STATS & SCORES
+   10. MULTIPLAYER ROOMS, LAG FIX & SMOOTH INTERPOLATION
    ================================================================= */
 const deathScreen = document.getElementById('death-screen');
 const respawnText = document.getElementById('respawn-text');
@@ -1157,7 +1292,7 @@ function die(killerName, killerId) {
   triggerDamageScreen();
   deathScreen.style.display = 'flex';
 
-  if (currentRoom) {
+  if (gameMode === 'online' && currentRoom) {
     update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
       hp: 0,
       isDead: true,
@@ -1166,25 +1301,11 @@ function die(killerName, killerId) {
 
     if (killerId && killerId !== player.id) {
       const killerRef = ref(db, `rooms/${currentRoom}/players/${killerId}`);
-      update(killerRef, {
-        kills: (allLobbyScores[killerId]?.kills || 0) + 1
-      });
+      update(killerRef, { kills: (allLobbyScores[killerId]?.kills || 0) + 1 });
     }
-
-    const now = Date.now();
-    const assistCandidates = recentDamageDealers.filter(d => d.fromId !== killerId && d.fromId !== player.id && now - d.time < 8000);
-    const uniqueAssistIds = [...new Set(assistCandidates.map(a => a.fromId))];
-
-    uniqueAssistIds.forEach(assisterId => {
-      const aRef = ref(db, `rooms/${currentRoom}/players/${assisterId}`);
-      update(aRef, {
-        assists: (allLobbyScores[assisterId]?.assists || 0) + 1
-      });
-    });
   }
 
   recentDamageDealers = [];
-
   let count = 3;
   respawnText.innerText = `RESPAWNING IN ${count}...`;
   const timer = setInterval(() => {
@@ -1214,7 +1335,7 @@ function respawn() {
   const spawnZ = (Math.random() - 0.5) * 30;
   camera.position.set(spawnX, EYE_HEIGHT, spawnZ);
 
-  if (currentRoom) {
+  if (gameMode === 'online' && currentRoom) {
     update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
       hp: 100,
       isDead: false,
@@ -1238,6 +1359,12 @@ async function joinRoom(roomId, name) {
     document.getElementById('btn-gyro').style.display = 'none';
   }
 
+  if (gameMode === 'offline') {
+    initOfflineMode();
+    return;
+  }
+
+  // Ghost Purge
   try {
     const existingSnap = await get(ref(db, `rooms/${roomId}/players`));
     if (existingSnap.exists()) {
@@ -1250,7 +1377,7 @@ async function joinRoom(roomId, name) {
       }
     }
   } catch (e) {
-    console.warn("Ghost purge check skipped:", e);
+    console.warn("Ghost purge skipped:", e);
   }
 
   const playerRef = ref(db, `rooms/${roomId}/players/${player.id}`);
@@ -1292,17 +1419,18 @@ async function joinRoom(roomId, name) {
         const mesh = createHighVisEnemy(data.name);
         scene.add(mesh);
         remotePlayers[id] = mesh;
+        mesh.targetPos = new THREE.Vector3(data.x, 0, data.z);
       }
       const pMesh = remotePlayers[id];
-      pMesh.position.lerp(new THREE.Vector3(data.x, 0, data.z), 0.35);
+      pMesh.targetPos = new THREE.Vector3(data.x, 0, data.z);
       pMesh.rotation.y = data.yaw;
 
       pMesh.isDead = !!data.isDead;
       if (pMesh.isDead) {
-        pMesh.modelRoot.rotation.z = THREE.MathUtils.lerp(pMesh.modelRoot.rotation.z, -Math.PI / 2, 0.2);
+        pMesh.modelRoot.rotation.z = -Math.PI / 2;
         pMesh.modelRoot.position.y = 0.25;
       } else {
-        pMesh.modelRoot.rotation.z = THREE.MathUtils.lerp(pMesh.modelRoot.rotation.z, 0, 0.2);
+        pMesh.modelRoot.rotation.z = 0;
         pMesh.modelRoot.position.y = 0;
       }
     }
@@ -1318,8 +1446,6 @@ async function joinRoom(roomId, name) {
     const hit = snap.val();
     remove(snap.ref);
     if (player.isDead) return;
-
-    recentDamageDealers.push({ fromId: hit.fromId, fromName: hit.fromName, time: hit.time || Date.now() });
 
     player.hp -= hit.amount;
     hpDisplay.innerText = Math.max(0, player.hp);
@@ -1353,13 +1479,18 @@ document.getElementById('btn-join').addEventListener('touchend', handleJoin, { p
 document.getElementById('btn-join').addEventListener('click', handleJoin);
 
 /* =================================================================
-   11. MAIN ENGINE LOOP & SMOOTH ANIMATIONS
+   11. MAIN ENGINE LOOP, WEAPON ANIMATIONS & LAG REDUCTION
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
 let footstepTimer = 0;
 const moveSpeed = 8.5;
 const GRAVITY = 24.0;
+
+// Bandwidth optimization: deadband tracking
+let lastSentX = 0;
+let lastSentZ = 0;
+let lastSentYaw = 0;
 
 function animate(time) {
   requestAnimationFrame(animate);
@@ -1371,22 +1502,30 @@ function animate(time) {
   updateDashCooldownUI(time);
   updatePlayerVisibilities();
 
-  // Smooth ADS Zoom (28deg FOV for tight zoom)
+  if (gameMode === 'offline') {
+    updateOfflineBots(dt);
+  }
+
+  // Smooth Karambit 360 Spin Animation
+  if (isSpinningKarambit) {
+    karambitSpinAngle += dt * 18.0; // Rapid clean rotation
+    karambitHolder.rotation.x = karambitSpinAngle;
+    if (karambitSpinAngle >= Math.PI * 2) {
+      karambitHolder.rotation.x = 0;
+      isSpinningKarambit = false;
+    }
+  }
+
+  // Smooth ADS Zoom
   const targetFov = isScoped ? 28 : 72;
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.22);
   camera.updateProjectionMatrix();
 
-  // Recoil recovery
+  // Recoil decay
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
 
-  // Aim alignment: center weapon when scoped
-  const targetGunX = isScoped ? 0.0 : 0.0;
-  const targetGunY = isScoped ? 0.06 : 0.0;
-  gunPivot.position.x = THREE.MathUtils.lerp(gunPivot.position.x, targetGunX, 0.25);
-  gunPivot.position.y = THREE.MathUtils.lerp(gunPivot.position.y, targetGunY, 0.25);
   gunPivot.position.z = THREE.MathUtils.lerp(gunPivot.position.z, 0, 0.2);
-
   camera.rotation.y = camYaw + player.recoilYaw;
   camera.rotation.x = camPitch + player.recoilPitch;
 
@@ -1406,7 +1545,7 @@ function animate(time) {
 
   const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05;
 
-  // Weapon sway & footstep rhythms
+  // Smooth Weapon Sway & Footsteps
   if (isMoving && player.isGrounded && !player.isDead) {
     const bobFactor = isScoped ? 0.0008 : 0.004;
     gunPivot.position.y += Math.sin(time * 0.012) * bobFactor;
@@ -1422,7 +1561,7 @@ function animate(time) {
     footstepTimer = 0.3;
   }
 
-  // Movement & Dash
+  // Dash & Movement
   if (dashDuration > 0) {
     dashDuration -= dt;
     const dX = THREE.MathUtils.clamp(camera.position.x + dashVelocity.x * dt, -MAP_BOUND, MAP_BOUND);
@@ -1446,12 +1585,8 @@ function animate(time) {
     const nextX = THREE.MathUtils.clamp(camera.position.x + deltaX, -MAP_BOUND, MAP_BOUND);
     const nextZ = THREE.MathUtils.clamp(camera.position.z + deltaZ, -MAP_BOUND, MAP_BOUND);
 
-    if (!checkCollision(nextX, camera.position.z)) {
-      camera.position.x = nextX;
-    }
-    if (!checkCollision(camera.position.x, nextZ)) {
-      camera.position.z = nextZ;
-    }
+    if (!checkCollision(nextX, camera.position.z)) camera.position.x = nextX;
+    if (!checkCollision(camera.position.x, nextZ)) camera.position.z = nextZ;
   }
 
   // Gravity
@@ -1464,23 +1599,41 @@ function animate(time) {
       camera.position.y = EYE_HEIGHT;
       player.vy = 0;
       player.isGrounded = true;
-
       if (wasInAir) SoundFx.land();
     } else {
       player.isGrounded = false;
     }
   }
 
-  // Network Sync
-  if (currentRoom && time - lastNetworkSync > 50) {
-    lastNetworkSync = time;
-    update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
-      x: camera.position.x,
-      y: camera.position.y,
-      z: camera.position.z,
-      yaw: camYaw,
-      lastSeen: Date.now()
-    });
+  // Smooth Interpolation of Remote Players (eliminates network stutter)
+  if (gameMode === 'online') {
+    for (let id in remotePlayers) {
+      const p = remotePlayers[id];
+      if (p.targetPos) {
+        p.position.lerp(p.targetPos, Math.min(1.0, dt * 14.0));
+      }
+    }
+
+    // Network Sync (throttled to 12 updates/sec with deadband to kill server lag)
+    if (currentRoom && time - lastNetworkSync > 85) {
+      const moved = Math.hypot(camera.position.x - lastSentX, camera.position.z - lastSentZ) > 0.05;
+      const rotated = Math.abs(camYaw - lastSentYaw) > 0.02;
+
+      if (moved || rotated) {
+        lastNetworkSync = time;
+        lastSentX = camera.position.x;
+        lastSentZ = camera.position.z;
+        lastSentYaw = camYaw;
+
+        update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
+          x: camera.position.x,
+          y: camera.position.y,
+          z: camera.position.z,
+          yaw: camYaw,
+          lastSeen: Date.now()
+        });
+      }
+    }
   }
 
   renderer.render(scene, camera);
