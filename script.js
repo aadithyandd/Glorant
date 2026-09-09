@@ -29,7 +29,7 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 /* =================================================================
-   2. THREE.JS SCENE & REALISTIC MAP
+   2. THREE.JS ENGINE SETUP
    ================================================================= */
 const canvas = document.querySelector('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
@@ -55,15 +55,21 @@ sunLight.position.set(25, 45, 20);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.width = 1024;
 sunLight.shadow.mapSize.height = 1024;
-sunLight.shadow.camera.near = 10;
-sunLight.shadow.camera.far = 120;
-sunLight.shadow.camera.left = -40;
-sunLight.shadow.camera.right = 40;
-sunLight.shadow.camera.top = 40;
-sunLight.shadow.camera.bottom = -40;
 scene.add(sunLight);
 
-// Procedural Concrete / Pavement Texture Generator
+/* =================================================================
+   3. MAP BUILDING & COLLISION SYSTEM
+   ================================================================= */
+const colliders = []; // Stores THREE.Box3 objects for player & hitscan collisions
+
+function registerBoxCollider(minX, minY, minZ, maxX, maxY, maxZ) {
+  colliders.push(new THREE.Box3(
+    new THREE.Vector3(minX, minY, minZ),
+    new THREE.Vector3(maxX, maxY, maxZ)
+  ));
+}
+
+// Procedural Concrete Texture
 function createConcreteTexture() {
   const c = document.createElement('canvas');
   c.width = 512;
@@ -72,127 +78,79 @@ function createConcreteTexture() {
   ctx.fillStyle = '#222831';
   ctx.fillRect(0, 0, 512, 512);
 
-  // Concrete speckles
-  for (let i = 0; i < 15000; i++) {
+  for (let i = 0; i < 12000; i++) {
     const v = Math.floor(Math.random() * 25);
     ctx.fillStyle = `rgba(${40 + v}, ${45 + v}, ${55 + v}, 0.3)`;
     ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
   }
-
-  // Tactical slab grid seams
   ctx.strokeStyle = '#141820';
   ctx.lineWidth = 4;
   for (let i = 0; i <= 512; i += 128) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i, 512);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, i);
-    ctx.lineTo(512, i);
-    ctx.stroke();
+    ctx.strokeRect(i, 0, 128, 512);
   }
-
   const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(12, 12);
   return tex;
 }
 
 // Floor
-const floorMat = new THREE.MeshStandardMaterial({
-  map: createConcreteTexture(),
-  roughness: 0.85,
-  metalness: 0.15
-});
+const floorMat = new THREE.MeshStandardMaterial({ map: createConcreteTexture(), roughness: 0.85 });
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), floorMat);
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 scene.add(floor);
 
-// Perimeter Blast Walls
+// Perimeter Walls + Colliders
 const wallMat = new THREE.MeshStandardMaterial({ color: 0x1a232c, roughness: 0.9 });
 const trimMat = new THREE.MeshStandardMaterial({ color: 0xff4655, roughness: 0.5 });
 
-function createPerimeterWall(w, h, d, x, y, z, rotY = 0) {
-  const g = new THREE.Group();
-  const main = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
-  main.position.y = h / 2;
-  main.castShadow = true;
-  main.receiveShadow = true;
-  g.add(main);
+function addWall(w, h, d, x, y, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+  m.position.set(x, y + h / 2, z);
+  m.castShadow = m.receiveShadow = true;
+  scene.add(m);
 
-  // Top security rim striping
   const trim = new THREE.Mesh(new THREE.BoxGeometry(w, 0.3, d + 0.1), trimMat);
-  trim.position.y = h;
-  g.add(trim);
+  trim.position.set(x, y + h, z);
+  scene.add(trim);
 
-  g.position.set(x, y, z);
-  g.rotation.y = rotY;
-  scene.add(g);
+  registerBoxCollider(x - w / 2, y, z - d / 2, x + w / 2, y + h, z + d / 2);
 }
 
-createPerimeterWall(90, 6, 1.5, 0, 0, -45);
-createPerimeterWall(90, 6, 1.5, 0, 0, 45);
-createPerimeterWall(90, 6, 1.5, -45, 0, 0, Math.PI / 2);
-createPerimeterWall(90, 6, 1.5, 45, 0, 0, Math.PI / 2);
+// Outer Map Boundaries
+addWall(90, 6, 2, 0, 0, -45);
+addWall(90, 6, 2, 0, 0, 45);
+addWall(2, 6, 90, -45, 0, 0);
+addWall(2, 6, 90, 45, 0, 0);
 
-// Tactical Shipping Containers & Cover Structures
+// Containers & Internal Cover Boxes
 const containerMats = [
   new THREE.MeshStandardMaterial({ color: 0x244259, roughness: 0.7, metalness: 0.3 }),
-  new THREE.MeshStandardMaterial({ color: 0x8a3a2b, roughness: 0.7, metalness: 0.3 }),
-  new THREE.MeshStandardMaterial({ color: 0x3d4a41, roughness: 0.7, metalness: 0.3 })
+  new THREE.MeshStandardMaterial({ color: 0x8a3a2b, roughness: 0.7, metalness: 0.3 })
 ];
 
-function createContainer(x, z, rotY = 0, matIndex = 0) {
-  const g = new THREE.Group();
-  const cMesh = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2.6, 7.5), containerMats[matIndex]);
-  cMesh.position.y = 1.3;
-  cMesh.castShadow = true;
-  cMesh.receiveShadow = true;
-  g.add(cMesh);
-
-  // Frame detailing
-  const rimGeo = new THREE.BoxGeometry(3.6, 2.7, 0.2);
-  const rimMat = new THREE.MeshStandardMaterial({ color: 0x11161b, roughness: 0.6 });
-  const frontRim = new THREE.Mesh(rimGeo, rimMat);
-  frontRim.position.set(0, 1.3, 3.75);
-  const backRim = frontRim.clone();
-  backRim.position.z = -3.75;
-  g.add(frontRim);
-  g.add(backRim);
-
-  g.position.set(x, 0, z);
-  g.rotation.y = rotY;
-  scene.add(g);
+function addContainer(w, h, d, x, z, matIdx = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), containerMats[matIdx]);
+  m.position.set(x, h / 2, z);
+  m.castShadow = m.receiveShadow = true;
+  scene.add(m);
+  registerBoxCollider(x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2);
 }
 
-createContainer(-15, -12, 0.4, 0);
-createContainer(18, -16, -0.6, 1);
-createContainer(-14, 15, -0.3, 2);
-createContainer(16, 18, 0.8, 0);
-createContainer(0, 20, Math.PI / 2, 1);
+addContainer(4, 2.8, 8, -16, -14, 0);
+addContainer(4, 2.8, 8, 16, -16, 1);
+addContainer(8, 2.8, 4, -14, 16, 1);
+addContainer(8, 2.8, 4, 18, 16, 0);
 
-// Raised Center Tactical Platform
-const platGeo = new THREE.BoxGeometry(16, 1.2, 16);
-const platMesh = new THREE.Mesh(platGeo, wallMat);
-platMesh.position.set(0, 0.6, 0);
-platMesh.castShadow = true;
-platMesh.receiveShadow = true;
-scene.add(platMesh);
+// Raised Central Platform
+const centerPlat = new THREE.Mesh(new THREE.BoxGeometry(16, 1.4, 16), wallMat);
+centerPlat.position.set(0, 0.7, 0);
+centerPlat.castShadow = centerPlat.receiveShadow = true;
+scene.add(centerPlat);
+registerBoxCollider(-8, 0, -8, 8, 1.4, 8);
 
-// Platform Edge Pillars
-for (let sx of [-7.5, 7.5]) {
-  for (let sz of [-7.5, 7.5]) {
-    const pil = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), trimMat);
-    pil.position.set(sx, 1.5, sz);
-    pil.castShadow = true;
-    scene.add(pil);
-  }
-}
-
-// Gun Viewmodel attached to Camera
+// Gun Viewmodel
 const gunPivot = new THREE.Group();
 camera.add(gunPivot);
 scene.add(camera);
@@ -210,13 +168,12 @@ muzzleFlash.position.set(0.18, -0.17, -0.75);
 gunPivot.add(muzzleFlash);
 
 /* =================================================================
-   3. BULLET TRACER SYSTEM
+   4. BULLET TRACERS
    ================================================================= */
 const tracers = [];
 
 function spawnTracer(startVec, endVec) {
-  const points = [startVec, endVec];
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const geometry = new THREE.BufferGeometry().setFromPoints([startVec, endVec]);
   const material = new THREE.LineBasicMaterial({
     color: 0x00ffff,
     transparent: true,
@@ -244,21 +201,18 @@ function updateTracers(dt) {
 }
 
 /* =================================================================
-   4. REALISTIC HUMANOID CHARACTER MODEL & NAME TAGS
+   5. PLAYER RIGGING & NAME TAGS
    ================================================================= */
 function createNameTagSprite(name) {
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 64;
   const ctx = c.getContext('2d');
-
   ctx.fillStyle = 'rgba(15, 25, 35, 0.85)';
   ctx.strokeStyle = '#ff4655';
   ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.roundRect(8, 8, 240, 48, 8);
-  ctx.fill();
-  ctx.stroke();
+  ctx.strokeRect(8, 8, 240, 48);
+  ctx.fillRect(8, 8, 240, 48);
 
   ctx.font = 'bold 24px monospace';
   ctx.fillStyle = '#00ffcc';
@@ -267,8 +221,7 @@ function createNameTagSprite(name) {
   ctx.fillText(name.toUpperCase(), 128, 32);
 
   const tex = new THREE.CanvasTexture(c);
-  const spriteMat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
-  const sprite = new THREE.Sprite(spriteMat);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
   sprite.scale.set(1.6, 0.4, 1);
   sprite.position.y = 2.25;
   return sprite;
@@ -279,26 +232,20 @@ function createHumanoidModel(name) {
   const modelRoot = new THREE.Group();
   root.add(modelRoot);
 
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0x222a33, roughness: 0.6 });
-  const vestMat = new THREE.MeshStandardMaterial({ color: 0xff4655, roughness: 0.4 });
-  const gearMat = new THREE.MeshStandardMaterial({ color: 0x11161b, roughness: 0.5 });
-  const visorMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, roughness: 0.2, metalness: 0.9 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0x222a33 });
+  const vestMat = new THREE.MeshStandardMaterial({ color: 0xff4655 });
+  const gearMat = new THREE.MeshStandardMaterial({ color: 0x11161b });
+  const visorMat = new THREE.MeshStandardMaterial({ color: 0x00ffcc, metalness: 0.9, roughness: 0.2 });
 
-  // Torso / Tactical Plate Carrier
+  // Torso
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.3), vestMat);
   torso.position.y = 1.05;
   torso.castShadow = true;
   modelRoot.add(torso);
 
-  // Tactical Belt
-  const belt = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.1, 0.32), gearMat);
-  belt.position.y = 0.72;
-  modelRoot.add(belt);
-
-  // Head & Tactical Visor
+  // Head & Visor
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.3, 0.28), skinMat);
   head.position.y = 1.55;
-  head.castShadow = true;
   modelRoot.add(head);
 
   const visor = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.09, 0.12), visorMat);
@@ -316,114 +263,29 @@ function createHumanoidModel(name) {
   rArm.rotation.x = -Math.PI / 4;
   modelRoot.add(rArm);
 
-  // Weapon in hand
-  const rifle = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 0.1, 0.5),
-    new THREE.MeshStandardMaterial({ color: 0x0a0d10, metalness: 0.8, roughness: 0.3 })
-  );
+  const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.5), gearMat);
   rifle.position.set(0.2, 0.95, 0.35);
   modelRoot.add(rifle);
 
-  // Legs & Boots
+  // Legs
   const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.65, 0.2), gearMat);
   lLeg.position.set(-0.16, 0.35, 0);
-  lLeg.castShadow = true;
   modelRoot.add(lLeg);
 
   const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.65, 0.2), gearMat);
   rLeg.position.set(0.16, 0.35, 0);
-  rLeg.castShadow = true;
   modelRoot.add(rLeg);
 
-  // Floating Name Tag
-  const nameSprite = createNameTagSprite(name || 'AGENT');
-  root.add(nameSprite);
-
+  root.add(createNameTagSprite(name || 'AGENT'));
   root.modelRoot = modelRoot;
   root.isDead = false;
   return root;
 }
 
 /* =================================================================
-   5. DAMAGE SCREEN & GYROSCOPE HANDLING
+   6. PLATFORM, INPUT & MOVEMENT COLLISION
    ================================================================= */
-const vignetteEl = document.getElementById('damage-vignette');
-let damageFlashTimeout = null;
-
-function triggerDamageScreen() {
-  // Edge pulse vignette
-  vignetteEl.style.background = 'rgba(255, 20, 40, 0.25)';
-  vignetteEl.style.boxShadow = 'inset 0 0 85px 30px rgba(255, 30, 45, 0.85)';
-
-  clearTimeout(damageFlashTimeout);
-  damageFlashTimeout = setTimeout(() => {
-    // Low health dynamic glow retention
-    const lowHpFactor = Math.max(0, (100 - player.hp) / 100);
-    vignetteEl.style.background = `rgba(255, 0, 30, ${lowHpFactor * 0.1})`;
-    vignetteEl.style.boxShadow = `inset 0 0 ${lowHpFactor * 70}px ${lowHpFactor * 25}px rgba(255, 30, 45, ${lowHpFactor * 0.6})`;
-  }, 220);
-}
-
-// Gyroscope tracking
-let gyroActive = false;
-let lastGamma = null;
-let lastBeta = null;
-const btnGyro = document.getElementById('btn-gyro');
-
-async function enableGyro(e) {
-  if (e) {
-    e.stopPropagation();
-    e.preventDefault();
-  }
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    try {
-      const permission = await DeviceOrientationEvent.requestPermission();
-      if (permission === 'granted') {
-        startGyro();
-      }
-    } catch (err) {
-      console.warn("Gyro permission denied:", err);
-    }
-  } else {
-    startGyro();
-  }
-}
-
-function startGyro() {
-  gyroActive = !gyroActive;
-  btnGyro.innerText = gyroActive ? "GYRO: ON" : "GYRO: OFF";
-  btnGyro.classList.toggle('active', gyroActive);
-  lastGamma = null;
-  lastBeta = null;
-}
-
-window.addEventListener('deviceorientation', (e) => {
-  if (!gyroActive || player.isDead) return;
-
-  const currentGamma = e.gamma;
-  const currentBeta = e.beta;
-
-  if (lastGamma !== null && lastBeta !== null) {
-    const deltaGamma = currentGamma - lastGamma;
-    const deltaBeta = currentBeta - lastBeta;
-
-    if (Math.abs(deltaGamma) < 15 && Math.abs(deltaBeta) < 15) {
-      const gyroSensitivity = 0.007;
-      camYaw -= (deltaGamma * Math.PI / 180) * gyroSensitivity * 60;
-      camPitch -= (deltaBeta * Math.PI / 180) * gyroSensitivity * 60;
-      camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
-    }
-  }
-  lastGamma = currentGamma;
-  lastBeta = currentBeta;
-});
-
-btnGyro.addEventListener('touchend', enableGyro, { passive: false });
-btnGyro.addEventListener('click', enableGyro);
-
-/* =================================================================
-   6. PLAYER STATE & TOUCH CONTROLS
-   ================================================================= */
+let platformMode = 'mobile'; // 'mobile' or 'pc'
 const player = {
   id: 'p_' + Math.random().toString(36).substr(2, 9),
   name: 'Agent',
@@ -438,29 +300,64 @@ const player = {
 
 let currentRoom = null;
 const remotePlayers = {};
+let camYaw = 0;
+let camPitch = 0;
 
+// Platform Selector Click Handlers
+document.querySelectorAll('.plat-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.plat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    platformMode = btn.getAttribute('data-plat');
+  });
+});
+
+// PC Keyboard State
+const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false };
+window.addEventListener('keydown', (e) => {
+  if (keys.hasOwnProperty(e.code)) keys[e.code] = true;
+  if (e.code === 'KeyR') triggerReload();
+});
+window.addEventListener('keyup', (e) => {
+  if (keys.hasOwnProperty(e.code)) keys[e.code] = false;
+});
+
+// PC Mouse Look (Pointer Lock API)
+canvas.addEventListener('click', () => {
+  if (platformMode === 'pc' && document.getElementById('lobby').style.display === 'none') {
+    canvas.requestPointerLock();
+  }
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (platformMode === 'pc' && document.pointerLockElement === canvas && !player.isDead) {
+    const mouseSensitivity = 0.0022;
+    camYaw -= e.movementX * mouseSensitivity;
+    camPitch -= e.movementY * mouseSensitivity;
+    camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
+  }
+});
+
+window.addEventListener('mousedown', (e) => {
+  if (platformMode === 'pc' && document.pointerLockElement === canvas && e.button === 0) {
+    triggerFire();
+  }
+});
+
+// Mobile Touch & Joystick Controls
 let joyTouchId = null;
 let lookTouchId = null;
 let joyStart = { x: 0, y: 0 };
 let joyInput = { x: 0, y: 0 };
-
-let camYaw = 0;
-let camPitch = 0;
 let lastLook = { x: 0, y: 0 };
 
 const joyBase = document.getElementById('joystick-base');
 const joyStick = document.getElementById('joystick-stick');
 const maxRadius = 45;
 
-document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
-document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
-document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
-
 window.addEventListener('touchstart', (e) => {
-  // Let lobby buttons and HUD pill triggers through cleanly
-  if (e.target.closest('#lobby') || e.target.closest('#btn-gyro') || e.target.tagName === 'INPUT') {
-    return;
-  }
+  if (platformMode === 'pc' || e.target.closest('#lobby') || e.target.closest('#btn-gyro') || e.target.tagName === 'INPUT') return;
   e.preventDefault();
 
   for (let i = 0; i < e.changedTouches.length; i++) {
@@ -468,7 +365,6 @@ window.addEventListener('touchstart', (e) => {
     const el = document.elementFromPoint(t.clientX, t.clientY);
     if (el && (el.classList.contains('action-btn') || el.id === 'btn-gyro')) continue;
 
-    // Left side = Joystick (only below top margin to avoid gyro area)
     if (t.clientX < window.innerWidth / 2 && t.clientY > 60 && joyTouchId === null) {
       joyTouchId = t.identifier;
       joyStart = { x: t.clientX, y: t.clientY };
@@ -476,8 +372,7 @@ window.addEventListener('touchstart', (e) => {
       joyBase.style.left = t.clientX + 'px';
       joyBase.style.top = t.clientY + 'px';
       joyStick.style.transform = `translate(-50%, -50%)`;
-      joyInput.x = 0;
-      joyInput.y = 0;
+      joyInput.x = joyInput.y = 0;
     } else if (t.clientX >= window.innerWidth / 2 && lookTouchId === null) {
       lookTouchId = t.identifier;
       lastLook = { x: t.clientX, y: t.clientY };
@@ -486,22 +381,20 @@ window.addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 window.addEventListener('touchmove', (e) => {
-  if (e.target.closest('#lobby')) return;
+  if (platformMode === 'pc' || e.target.closest('#lobby')) return;
   e.preventDefault();
 
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
-
     if (t.identifier === joyTouchId) {
       const dx = t.clientX - joyStart.x;
       const dy = t.clientY - joyStart.y;
       const dist = Math.hypot(dx, dy);
       const angle = Math.atan2(dy, dx);
-      const clampedDist = Math.min(maxRadius, dist);
+      const clamped = Math.min(maxRadius, dist);
 
-      const stickX = Math.cos(angle) * clampedDist;
-      const stickY = Math.sin(angle) * clampedDist;
-
+      const stickX = Math.cos(angle) * clamped;
+      const stickY = Math.sin(angle) * clamped;
       joyStick.style.transform = `translate(calc(-50% + ${stickX}px), calc(-50% + ${stickY}px))`;
       joyInput.x = stickX / maxRadius;
       joyInput.y = -(stickY / maxRadius);
@@ -509,10 +402,8 @@ window.addEventListener('touchmove', (e) => {
       const dx = t.clientX - lastLook.x;
       const dy = t.clientY - lastLook.y;
       lastLook = { x: t.clientX, y: t.clientY };
-
-      const lookSensitivity = 0.004;
-      camYaw -= dx * lookSensitivity;
-      camPitch -= dy * lookSensitivity;
+      camYaw -= dx * 0.004;
+      camPitch -= dy * 0.004;
       camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
     }
   }
@@ -523,8 +414,7 @@ const endTouches = (e) => {
     const t = e.changedTouches[i];
     if (t.identifier === joyTouchId) {
       joyTouchId = null;
-      joyInput.x = 0;
-      joyInput.y = 0;
+      joyInput.x = joyInput.y = 0;
       joyBase.style.display = 'none';
     } else if (t.identifier === lookTouchId) {
       lookTouchId = null;
@@ -534,12 +424,75 @@ const endTouches = (e) => {
 window.addEventListener('touchend', endTouches);
 window.addEventListener('touchcancel', endTouches);
 
+// Mobile Gyroscope
+let gyroActive = false;
+let lastGamma = null;
+let lastBeta = null;
+const btnGyro = document.getElementById('btn-gyro');
+
+btnGyro.addEventListener('click', async (e) => {
+  e.stopPropagation();
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const perm = await DeviceOrientationEvent.requestPermission();
+      if (perm === 'granted') toggleGyro();
+    } catch (err) { console.warn(err); }
+  } else {
+    toggleGyro();
+  }
+});
+
+function toggleGyro() {
+  gyroActive = !gyroActive;
+  btnGyro.innerText = gyroActive ? "GYRO: ON" : "GYRO: OFF";
+  btnGyro.classList.toggle('active', gyroActive);
+}
+
+window.addEventListener('deviceorientation', (e) => {
+  if (!gyroActive || player.isDead || platformMode === 'pc') return;
+  if (lastGamma !== null && lastBeta !== null) {
+    const dg = e.gamma - lastGamma;
+    const db = e.beta - lastBeta;
+    if (Math.abs(dg) < 15 && Math.abs(db) < 15) {
+      camYaw -= (dg * Math.PI / 180) * 0.45;
+      camPitch -= (db * Math.PI / 180) * 0.45;
+      camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
+    }
+  }
+  lastGamma = e.gamma;
+  lastBeta = e.beta;
+});
+
+// AABB Collision Detection for Character Movement
+function checkCollision(targetX, targetZ) {
+  const pRadius = 0.4;
+  const playerBox = new THREE.Box3(
+    new THREE.Vector3(targetX - pRadius, 0.1, targetZ - pRadius),
+    new THREE.Vector3(targetX + pRadius, 1.8, targetZ + pRadius)
+  );
+  for (let box of colliders) {
+    if (playerBox.intersectsBox(box)) return true;
+  }
+  return false;
+}
+
 /* =================================================================
-   7. SHOOTING & HITSCAN
+   7. DAMAGE, WEAPONS & SHOOTING
    ================================================================= */
+const vignetteEl = document.getElementById('damage-vignette');
 const raycaster = new THREE.Raycaster();
 const ammoDisplay = document.getElementById('ammo-val');
 const hpDisplay = document.getElementById('hp-val');
+
+function triggerDamageScreen() {
+  vignetteEl.style.background = 'rgba(255, 20, 40, 0.25)';
+  vignetteEl.style.boxShadow = 'inset 0 0 85px 30px rgba(255, 30, 45, 0.85)';
+  setTimeout(() => {
+    const lowHpFactor = Math.max(0, (100 - player.hp) / 100);
+    vignetteEl.style.background = `rgba(255, 0, 30, ${lowHpFactor * 0.1})`;
+    vignetteEl.style.boxShadow = `inset 0 0 ${lowHpFactor * 70}px ${lowHpFactor * 25}px rgba(255, 30, 45, ${lowHpFactor * 0.6})`;
+  }, 200);
+}
 
 function triggerFire() {
   if (player.isReloading || player.isDead) return;
@@ -570,7 +523,6 @@ function triggerFire() {
 
   if (hits.length > 0) {
     endPoint.copy(hits[0].point);
-
     const hitObj = hits[0].object;
     let targetId = null;
     for (let id in remotePlayers) {
@@ -591,7 +543,6 @@ function triggerReload() {
   if (player.isReloading || player.ammo === player.maxAmmo || player.isDead) return;
   player.isReloading = true;
   ammoDisplay.innerText = `RELOAD...`;
-
   gunPivot.position.y = -0.22;
   setTimeout(() => {
     player.ammo = player.maxAmmo;
@@ -612,7 +563,7 @@ document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 /* =================================================================
-   8. MULTIPLAYER ROOMS & DAMAGE SYNC
+   8. MULTIPLAYER ROOMS & RESPAWN
    ================================================================= */
 const deathScreen = document.getElementById('death-screen');
 const respawnText = document.getElementById('respawn-text');
@@ -625,16 +576,15 @@ function die() {
   deathScreen.style.display = 'flex';
 
   if (currentRoom) {
-    const playerRef = ref(db, `rooms/${currentRoom}/players/${player.id}`);
-    update(playerRef, { hp: 0, isDead: true });
+    update(ref(db, `rooms/${currentRoom}/players/${player.id}`), { hp: 0, isDead: true });
   }
 
-  let countdown = 3;
-  respawnText.innerText = `RESPAWNING IN ${countdown}...`;
+  let count = 3;
+  respawnText.innerText = `RESPAWNING IN ${count}...`;
   const timer = setInterval(() => {
-    countdown--;
-    if (countdown > 0) {
-      respawnText.innerText = `RESPAWNING IN ${countdown}...`;
+    count--;
+    if (count > 0) {
+      respawnText.innerText = `RESPAWNING IN ${count}...`;
     } else {
       clearInterval(timer);
       respawn();
@@ -650,19 +600,17 @@ function respawn() {
   ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
   deathScreen.style.display = 'none';
 
-  // Clear damage vignette
   vignetteEl.style.background = 'rgba(255, 0, 30, 0)';
   vignetteEl.style.boxShadow = 'inset 0 0 75px 25px rgba(255, 30, 45, 0)';
 
-  camera.position.set((Math.random() - 0.5) * 25, 1.6, (Math.random() - 0.5) * 25);
+  camera.position.set((Math.random() - 0.5) * 20, 1.6, 25 + Math.random() * 5);
 
   if (currentRoom) {
-    const playerRef = ref(db, `rooms/${currentRoom}/players/${player.id}`);
-    update(playerRef, { 
-      hp: 100, 
+    update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
+      hp: 100,
       isDead: false,
-      x: camera.position.x, 
-      z: camera.position.z 
+      x: camera.position.x,
+      z: camera.position.z
     });
   }
 }
@@ -674,22 +622,26 @@ function joinRoom(roomId, name) {
   document.getElementById('lobby').style.display = 'none';
   document.getElementById('hud').style.display = 'block';
 
+  // Toggle mobile UI visibility based on chosen platform
+  if (platformMode === 'pc') {
+    document.getElementById('mobile-controls').style.display = 'none';
+    document.getElementById('btn-gyro').style.display = 'none';
+  }
+
   const playerRef = ref(db, `rooms/${roomId}/players/${player.id}`);
   set(playerRef, {
     name: player.name,
     x: 0,
     y: 1.6,
-    z: 0,
+    z: 28,
     yaw: 0,
     hp: 100,
     isDead: false
   });
-
   onDisconnect(playerRef).remove();
 
-  const roomPlayersRef = ref(db, `rooms/${roomId}/players`);
-  onValue(roomPlayersRef, (snapshot) => {
-    const list = snapshot.val() || {};
+  onValue(ref(db, `rooms/${roomId}/players`), (snap) => {
+    const list = snap.val() || {};
     for (let id in list) {
       if (id === player.id) continue;
       const data = list[id];
@@ -699,22 +651,19 @@ function joinRoom(roomId, name) {
         scene.add(mesh);
         remotePlayers[id] = mesh;
       }
-
       const pMesh = remotePlayers[id];
       pMesh.position.lerp(new THREE.Vector3(data.x, 0, data.z), 0.35);
       pMesh.rotation.y = data.yaw;
 
-      // Remote death falling animation
       pMesh.isDead = !!data.isDead;
       if (pMesh.isDead) {
         pMesh.modelRoot.rotation.z = THREE.MathUtils.lerp(pMesh.modelRoot.rotation.z, -Math.PI / 2, 0.2);
-        pMesh.modelRoot.position.y = THREE.MathUtils.lerp(pMesh.modelRoot.position.y, 0.25, 0.2);
+        pMesh.modelRoot.position.y = 0.25;
       } else {
         pMesh.modelRoot.rotation.z = THREE.MathUtils.lerp(pMesh.modelRoot.rotation.z, 0, 0.2);
-        pMesh.modelRoot.position.y = THREE.MathUtils.lerp(pMesh.modelRoot.position.y, 0, 0.2);
+        pMesh.modelRoot.position.y = 0;
       }
     }
-
     for (let id in remotePlayers) {
       if (!list[id]) {
         scene.remove(remotePlayers[id]);
@@ -723,9 +672,7 @@ function joinRoom(roomId, name) {
     }
   });
 
-  // Damage listener
-  const myDamageRef = ref(db, `rooms/${roomId}/players/${player.id}/damage`);
-  onChildAdded(myDamageRef, (snap) => {
+  onChildAdded(ref(db, `rooms/${roomId}/players/${player.id}/damage`), (snap) => {
     const hit = snap.val();
     remove(snap.ref);
     if (player.isDead) return;
@@ -750,33 +697,22 @@ function addKillFeed(msg) {
   setTimeout(() => item.remove(), 3500);
 }
 
-function handleJoinAction(e) {
-  if (e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
+function handleJoin(e) {
+  if (e) e.preventDefault();
   const name = document.getElementById('player-name').value.trim() || 'Agent';
   const room = document.getElementById('room-input').value.trim().toUpperCase() || 'MAIN';
-  
-  try {
-    joinRoom(room, name);
-  } catch (err) {
-    console.error("Firebase Room Join Error:", err);
-    document.getElementById('lobby').style.display = 'none';
-    document.getElementById('hud').style.display = 'block';
-  }
+  joinRoom(room, name);
 }
 
-const joinBtn = document.getElementById('btn-join');
-joinBtn.addEventListener('touchend', handleJoinAction, { passive: false });
-joinBtn.addEventListener('click', handleJoinAction);
+document.getElementById('btn-join').addEventListener('touchend', handleJoin, { passive: false });
+document.getElementById('btn-join').addEventListener('click', handleJoin);
 
 /* =================================================================
-   9. GAME ENGINE LOOP
+   9. MAIN ENGINE LOOP & PHYSICS
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
-const moveSpeed = 7.5;
+const moveSpeed = 8.0;
 
 function animate(time) {
   requestAnimationFrame(animate);
@@ -794,29 +730,47 @@ function animate(time) {
   camera.rotation.y = camYaw + player.recoilYaw;
   camera.rotation.x = camPitch + player.recoilPitch;
 
-  // Joystick Movement
-  if (!player.isDead && Math.hypot(joyInput.x, joyInput.y) > 0.05) {
+  // Resolve Inputs
+  let inputX = 0;
+  let inputZ = 0;
+
+  if (platformMode === 'pc') {
+    if (keys.KeyW) inputZ += 1;
+    if (keys.KeyS) inputZ -= 1;
+    if (keys.KeyA) inputX -= 1;
+    if (keys.KeyD) inputX += 1;
+  } else {
+    inputX = joyInput.x;
+    inputZ = joyInput.y;
+  }
+
+  // Calculate Movement with Collision
+  if (!player.isDead && (Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05)) {
     const sinY = Math.sin(camYaw);
     const cosY = Math.cos(camYaw);
 
-    const fwdX = -sinY * joyInput.y;
-    const fwdZ = -cosY * joyInput.y;
+    const fwdX = -sinY * inputZ;
+    const fwdZ = -cosY * inputZ;
+    const strafeX = cosY * inputX;
+    const strafeZ = -sinY * inputX;
 
-    const strafeX = cosY * joyInput.x;
-    const strafeZ = -sinY * joyInput.x;
+    const deltaX = (fwdX + strafeX) * moveSpeed * dt;
+    const deltaZ = (fwdZ + strafeZ) * moveSpeed * dt;
 
-    camera.position.x += (fwdX + strafeX) * moveSpeed * dt;
-    camera.position.z += (fwdZ + strafeZ) * moveSpeed * dt;
-
-    camera.position.x = Math.max(-42, Math.min(42, camera.position.x));
-    camera.position.z = Math.max(-42, Math.min(42, camera.position.z));
+    // Slide on X axis
+    if (!checkCollision(camera.position.x + deltaX, camera.position.z)) {
+      camera.position.x += deltaX;
+    }
+    // Slide on Z axis
+    if (!checkCollision(camera.position.x, camera.position.z + deltaZ)) {
+      camera.position.z += deltaZ;
+    }
   }
 
-  // Network sync throttled to 20 updates/sec
+  // Network Sync (20 ticks/sec)
   if (currentRoom && time - lastNetworkSync > 50) {
     lastNetworkSync = time;
-    const playerRef = ref(db, `rooms/${currentRoom}/players/${player.id}`);
-    update(playerRef, {
+    update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
       x: camera.position.x,
       z: camera.position.z,
       yaw: camYaw
