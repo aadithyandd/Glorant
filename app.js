@@ -321,7 +321,7 @@ sensSlider.addEventListener('input', (e) => {
   sensLabel.innerText = `SENS: ${userSensitivity.toFixed(1)}x`;
 });
 
-const DASH_COOLDOWN = 10000; // 10 seconds
+const DASH_COOLDOWN = 1000; // 10 seconds
 let lastDashTime = 0;
 let dashVelocity = { x: 0, z: 0 };
 let dashDuration = 0;
