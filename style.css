@@ -35,6 +35,60 @@ body, html {
   transition: background 0.08s ease-out, box-shadow 0.15s ease-out;
 }
 
+/* SCOREBOARD OVERLAY */
+#scoreboard-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  background: rgba(10, 14, 20, 0.75);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.sb-card {
+  background: rgba(15, 25, 35, 0.95);
+  border: 1px solid #ff4655;
+  width: 90%;
+  max-width: 480px;
+  border-radius: 4px;
+  padding: 20px;
+  box-shadow: 0 0 25px rgba(255, 70, 85, 0.3);
+}
+.sb-header {
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #ff4655;
+  text-align: center;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #334454;
+  padding-bottom: 8px;
+}
+#sb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: monospace;
+  color: #ece8e1;
+}
+#sb-table th {
+  color: #8b9bb4;
+  font-size: 0.9rem;
+  padding: 8px;
+  border-bottom: 2px solid #334454;
+}
+#sb-table td {
+  padding: 10px 8px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 1rem;
+}
+#sb-table td:first-child {
+  text-align: left;
+  font-weight: bold;
+  color: #00ffcc;
+}
+
 /* LOBBY */
 #lobby {
   position: absolute;
@@ -146,7 +200,6 @@ button.btn:active { background: #d33240; }
   pointer-events: none;
 }
 
-/* SENSITIVITY ADJUSTER */
 .sens-container {
   display: flex;
   align-items: center;
@@ -268,7 +321,7 @@ button.btn:active { background: #d33240; }
   letter-spacing: 2px;
 }
 
-/* MOBILE CONTROLS */
+/* TOUCH CONTROLS */
 #mobile-controls { display: block; }
 .touch-zone {
   position: absolute;
