@@ -29,7 +29,7 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 /* =================================================================
-   2. THREE.JS ENGINE SETUP
+   2. THREE.JS SCENE SETUP
    ================================================================= */
 const canvas = document.querySelector('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
@@ -40,7 +40,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#0b1219');
-scene.fog = new THREE.FogExp2('#0b1219', 0.015);
+scene.fog = new THREE.FogExp2('#0b1219', 0.007);
 
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.rotation.order = 'YXZ';
@@ -52,79 +52,135 @@ camera.position.set(0, EYE_HEIGHT, 15);
 const ambientLight = new THREE.AmbientLight(0xdde6f0, 0.65);
 scene.add(ambientLight);
 
-const sunLight = new THREE.DirectionalLight(0xffeedd, 1.1);
-sunLight.position.set(30, 50, 25);
+const sunLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+sunLight.position.set(60, 100, 50);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.width = 1024;
-sunLight.shadow.mapSize.height = 1024;
+sunLight.shadow.mapSize.width = 2048;
+sunLight.shadow.mapSize.height = 2048;
+sunLight.shadow.camera.near = 10;
+sunLight.shadow.camera.far = 300;
+sunLight.shadow.camera.left = -150;
+sunLight.shadow.camera.right = 150;
+sunLight.shadow.camera.top = 150;
+sunLight.shadow.camera.bottom = -150;
 scene.add(sunLight);
 
 /* =================================================================
-   3. GROUND RAYCASTING, MAP LOADING & BOUNDARIES
+   3. OPEN-WORLD PROCEDURAL ARENA & COLLISION ENGINE
    ================================================================= */
 const colliders = [];
-const groundMeshes = [];
+const MAP_SIZE = 300;
+const MAP_BOUND = MAP_SIZE / 2 - 4;
 
-// Fallback Floor
-const fallbackFloor = new THREE.Mesh(
-  new THREE.PlaneGeometry(120, 120),
-  new THREE.MeshStandardMaterial({ color: 0x161e26, roughness: 0.85 })
-);
-fallbackFloor.rotation.x = -Math.PI / 2;
-fallbackFloor.receiveShadow = true;
-scene.add(fallbackFloor);
-groundMeshes.push(fallbackFloor);
-
-// Boundary limits
-const MAP_BOUND_X = 46;
-const MAP_BOUND_Z = 46;
-
-// Load GLTF / GLB Map
-if (typeof THREE.GLTFLoader !== 'undefined') {
-  const loader = new THREE.GLTFLoader();
-  loader.load(
-    'lowpoly__fps__tdm__game__map_by_resoforge.glb',
-    (gltf) => {
-      const map = gltf.scene;
-      map.scale.set(1.4, 1.4, 1.4);
-      map.position.set(0, 0, 0);
-
-      map.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-          groundMeshes.push(child);
-
-          child.geometry.computeBoundingBox();
-          const box = new THREE.Box3();
-          box.copy(child.geometry.boundingBox).applyMatrix4(child.matrixWorld);
-
-          // Walls and obstacles (height > 0.6)
-          if (box.max.y > 0.6 && (box.max.x - box.min.x < 45)) {
-            colliders.push(box);
-          }
-        }
-      });
-      scene.add(map);
-    },
-    undefined,
-    (err) => {
-      console.warn("Using fallback tactical arena floor.", err);
-    }
-  );
+function registerBoxCollider(minX, minY, minZ, maxX, maxY, maxZ) {
+  colliders.push(new THREE.Box3(
+    new THREE.Vector3(minX, minY, minZ),
+    new THREE.Vector3(maxX, maxY, maxZ)
+  ));
 }
 
-// Downward Raycaster for walking on slopes/steps/ground
-const downRay = new THREE.Raycaster();
-const downVector = new THREE.Vector3(0, -1, 0);
+// Procedural Open-World Ground
+function createTerrainTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 512;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#161d24';
+  ctx.fillRect(0, 0, 512, 512);
 
-function getGroundY(currX, currZ, currY) {
-  downRay.set(new THREE.Vector3(currX, currY + 1.0, currZ), downVector);
-  const hits = downRay.intersectObjects(groundMeshes, true);
-  if (hits.length > 0) {
-    return hits[0].point.y;
+  for (let i = 0; i < 20000; i++) {
+    const v = Math.floor(Math.random() * 25);
+    ctx.fillStyle = `rgba(${35 + v}, ${40 + v}, ${50 + v}, 0.3)`;
+    ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
   }
-  return 0; // Fallback ground level
+  ctx.strokeStyle = '#0d1318';
+  ctx.lineWidth = 3;
+  for (let i = 0; i <= 512; i += 64) {
+    ctx.strokeRect(i, 0, 64, 512);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(40, 40);
+  return tex;
+}
+
+const terrainMat = new THREE.MeshStandardMaterial({ map: createTerrainTexture(), roughness: 0.85 });
+const terrain = new THREE.Mesh(new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE), terrainMat);
+terrain.rotation.x = -Math.PI / 2;
+terrain.receiveShadow = true;
+scene.add(terrain);
+
+// Massive Outer Boundaries
+const boundMat = new THREE.MeshStandardMaterial({ color: 0x0f151c, roughness: 0.9 });
+function createPerimeterWall(w, h, d, x, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), boundMat);
+  m.position.set(x, h / 2, z);
+  scene.add(m);
+  registerBoxCollider(x - w / 2, 0, z - d / 2, x + w / 2, h, z + d / 2);
+}
+createPerimeterWall(MAP_SIZE, 12, 4, 0, -MAP_SIZE / 2);
+createPerimeterWall(MAP_SIZE, 12, 4, 0, MAP_SIZE / 2);
+createPerimeterWall(4, 12, MAP_SIZE, -MAP_SIZE / 2, 0);
+createPerimeterWall(4, 12, MAP_SIZE, MAP_SIZE / 2, 0);
+
+// Random Seeded Procedural Obstacles
+const structMats = [
+  new THREE.MeshStandardMaterial({ color: 0x223545, roughness: 0.7, metalness: 0.2 }),
+  new THREE.MeshStandardMaterial({ color: 0x6e2b20, roughness: 0.7, metalness: 0.2 }),
+  new THREE.MeshStandardMaterial({ color: 0x2b3830, roughness: 0.7, metalness: 0.2 }),
+  new THREE.MeshStandardMaterial({ color: 0x1c242c, roughness: 0.8 })
+];
+
+function buildObstacle(type, x, z) {
+  const g = new THREE.Group();
+
+  if (type === 0) {
+    // Military Watchtower / Bunker Base
+    const base = new THREE.Mesh(new THREE.BoxGeometry(8, 3.5, 8), structMats[3]);
+    base.position.y = 1.75;
+    base.castShadow = base.receiveShadow = true;
+    g.add(base);
+    registerBoxCollider(x - 4, 0, z - 4, x + 4, 3.5, z + 4);
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(9, 0.4, 9), structMats[0]);
+    roof.position.y = 3.6;
+    g.add(roof);
+  } else if (type === 1) {
+    // Industrial Shipping Container
+    const mat = structMats[Math.floor(Math.random() * 3)];
+    const cont = new THREE.Mesh(new THREE.BoxGeometry(4.5, 3.2, 10), mat);
+    cont.position.y = 1.6;
+    cont.castShadow = cont.receiveShadow = true;
+    g.add(cont);
+    registerBoxCollider(x - 2.25, 0, z - 5, x + 2.25, 3.2, z + 5);
+  } else {
+    // Concrete Cover Pillar
+    const pil = new THREE.Mesh(new THREE.BoxGeometry(3, 2.4, 3), structMats[3]);
+    pil.position.y = 1.2;
+    pil.castShadow = pil.receiveShadow = true;
+    g.add(pil);
+    registerBoxCollider(x - 1.5, 0, z - 1.5, x + 1.5, 2.4, z + 1.5);
+  }
+
+  g.position.set(x, 0, z);
+  scene.add(g);
+}
+
+// Populate Open World with ~65 Random Structures
+let seed = 42;
+function pseudoRandom() {
+  seed = (seed * 9301 + 49297) % 233280;
+  return seed / 233280;
+}
+
+for (let i = 0; i < 65; i++) {
+  const rx = (pseudoRandom() - 0.5) * (MAP_SIZE - 40);
+  const rz = (pseudoRandom() - 0.5) * (MAP_SIZE - 40);
+  // Keep spawn zone open
+  if (Math.hypot(rx, rz) > 16) {
+    const t = Math.floor(pseudoRandom() * 3);
+    buildObstacle(t, rx, rz);
+  }
 }
 
 // Gun Viewmodel
@@ -148,7 +204,6 @@ gunPivot.add(muzzleFlash);
    4. BULLET TRACERS
    ================================================================= */
 const tracers = [];
-
 function spawnTracer(startVec, endVec) {
   const geom = new THREE.BufferGeometry().setFromPoints([startVec, endVec]);
   const mat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 1.0, linewidth: 2 });
@@ -173,7 +228,7 @@ function updateTracers(dt) {
 }
 
 /* =================================================================
-   5. ENEMY MODEL & BILLBOARD HEALTH
+   5. ENEMY MODEL & HIGH-VIS BILLBOARD
    ================================================================= */
 function createNameTagSprite(name) {
   const c = document.createElement('canvas');
@@ -262,14 +317,13 @@ function createHighVisEnemy(name) {
 }
 
 /* =================================================================
-   6. SENSITIVITY, PLATFORM & PHYSICS
+   6. PLAYER STATE, INPUTS & TAB SCOREBOARD
    ================================================================= */
 let platformMode = 'mobile';
 let userSensitivity = 1.0;
 
 const sensSlider = document.getElementById('sens-slider');
 const sensLabel = document.getElementById('sens-label');
-
 sensSlider.addEventListener('input', (e) => {
   userSensitivity = parseFloat(e.target.value);
   sensLabel.innerText = `SENS: ${userSensitivity.toFixed(1)}x`;
@@ -281,6 +335,9 @@ const player = {
   hp: 100,
   ammo: 25,
   maxAmmo: 25,
+  kills: 0,
+  deaths: 0,
+  assists: 0,
   isReloading: false,
   isDead: false,
   recoilPitch: 0,
@@ -291,6 +348,9 @@ const player = {
 
 let currentRoom = null;
 const remotePlayers = {};
+let allLobbyScores = {}; // Realtime KDA map of all room players
+let recentDamageDealers = []; // [{ fromId, time }] to reward assists
+
 let camYaw = 0;
 let camPitch = 0;
 
@@ -304,17 +364,57 @@ document.querySelectorAll('.plat-btn').forEach(btn => {
   });
 });
 
-// PC Keyboard & Spacebar Jump
+// Scoreboard Modal Logic
+const sbModal = document.getElementById('scoreboard-modal');
+const sbRows = document.getElementById('sb-rows');
+let isScoreboardOpen = false;
+
+function toggleScoreboard(forceState) {
+  isScoreboardOpen = typeof forceState === 'boolean' ? forceState : !isScoreboardOpen;
+  sbModal.style.display = isScoreboardOpen ? 'flex' : 'none';
+  if (isScoreboardOpen) renderScoreboard();
+}
+
+function renderScoreboard() {
+  sbRows.innerHTML = '';
+  // Convert scores object to sorted array by kills desc
+  const list = Object.values(allLobbyScores).sort((a, b) => (b.kills || 0) - (a.kills || 0));
+  
+  for (let p of list) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${p.name || 'Agent'} ${p.id === player.id ? ' (YOU)' : ''}</td>
+      <td>${p.kills || 0}</td>
+      <td>${p.deaths || 0}</td>
+      <td>${p.assists || 0}</td>
+    `;
+    sbRows.appendChild(tr);
+  }
+}
+
+// Mobile Tab Toggle
+const btnTabToggle = document.getElementById('btn-tab-toggle');
+btnTabToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleScoreboard();
+});
+
+// PC Keyboard & Tab Binding
 const keys = { forward: false, backward: false, left: false, right: false };
 
 function triggerJump() {
   if (player.isGrounded && !player.isDead) {
-    player.vy = 8.5; // Jump impulse
+    player.vy = 8.5;
     player.isGrounded = false;
   }
 }
 
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'Tab') {
+    e.preventDefault();
+    toggleScoreboard(true);
+    return;
+  }
   const k = e.key.toLowerCase();
   if (e.code === 'KeyW' || k === 'w' || e.code === 'ArrowUp') keys.forward = true;
   if (e.code === 'KeyS' || k === 's' || e.code === 'ArrowDown') keys.backward = true;
@@ -328,6 +428,11 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
+  if (e.code === 'Tab') {
+    e.preventDefault();
+    toggleScoreboard(false);
+    return;
+  }
   const k = e.key.toLowerCase();
   if (e.code === 'KeyW' || k === 'w' || e.code === 'ArrowUp') keys.forward = false;
   if (e.code === 'KeyS' || k === 's' || e.code === 'ArrowDown') keys.backward = false;
@@ -357,7 +462,7 @@ window.addEventListener('mousedown', (e) => {
   }
 });
 
-// Mobile Controls
+// Mobile Dual Touch
 let joyTouchId = null;
 let lookTouchId = null;
 let joyStart = { x: 0, y: 0 };
@@ -369,13 +474,13 @@ const joyStick = document.getElementById('joystick-stick');
 const maxRadius = 45;
 
 window.addEventListener('touchstart', (e) => {
-  if (platformMode === 'pc' || e.target.closest('#lobby') || e.target.closest('.sens-container') || e.target.closest('#btn-gyro') || e.target.tagName === 'INPUT') return;
+  if (platformMode === 'pc' || e.target.closest('#lobby') || e.target.closest('#scoreboard-modal') || e.target.closest('.sens-container') || e.target.closest('#btn-gyro') || e.target.closest('#btn-tab-toggle') || e.target.tagName === 'INPUT') return;
   e.preventDefault();
 
   for (let i = 0; i < e.changedTouches.length; i++) {
     const t = e.changedTouches[i];
     const el = document.elementFromPoint(t.clientX, t.clientY);
-    if (el && (el.classList.contains('action-btn') || el.id === 'btn-gyro')) continue;
+    if (el && (el.classList.contains('action-btn') || el.id === 'btn-gyro' || el.id === 'btn-tab-toggle')) continue;
 
     if (t.clientX < window.innerWidth / 2 && t.clientY > 60 && joyTouchId === null) {
       joyTouchId = t.identifier;
@@ -436,7 +541,6 @@ const endTouches = (e) => {
 window.addEventListener('touchend', endTouches);
 window.addEventListener('touchcancel', endTouches);
 
-// Mobile Jump Button
 document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
   e.preventDefault();
   triggerJump();
@@ -481,7 +585,7 @@ window.addEventListener('deviceorientation', (e) => {
   lastBeta = e.beta;
 });
 
-// AABB Box Collider check
+// Collision check against procedural obstacles
 function checkCollision(targetX, targetZ) {
   const pRadius = 0.45;
   const playerBox = new THREE.Box3(
@@ -495,7 +599,7 @@ function checkCollision(targetX, targetZ) {
 }
 
 /* =================================================================
-   7. DAMAGE, WEAPONS & FIRING
+   7. DAMAGE, WEAPONS & SHOOTING
    ================================================================= */
 const vignetteEl = document.getElementById('damage-vignette');
 const raycaster = new THREE.Raycaster();
@@ -547,10 +651,10 @@ function triggerFire() {
     }
     if (targetId && currentRoom) {
       const damageRef = ref(db, `rooms/${currentRoom}/players/${targetId}/damage`);
-      push(damageRef, { from: player.name, amount: 35 });
+      push(damageRef, { fromId: player.id, fromName: player.name, amount: 35, time: Date.now() });
     }
   } else {
-    endPoint = camera.position.clone().add(raycaster.ray.direction.clone().multiplyScalar(60));
+    endPoint = camera.position.clone().add(raycaster.ray.direction.clone().multiplyScalar(90));
   }
 
   spawnTracer(muzzleWorld, endPoint);
@@ -580,21 +684,48 @@ document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 /* =================================================================
-   8. MULTIPLAYER ROOMS & RESPAWN
+   8. MULTIPLAYER ROOMS, KDA SCORE SYNC & DEATH
    ================================================================= */
 const deathScreen = document.getElementById('death-screen');
 const respawnText = document.getElementById('respawn-text');
 
-function die() {
+function die(killerName, killerId) {
   player.hp = 0;
+  player.deaths++;
   player.isDead = true;
   hpDisplay.innerText = 0;
   triggerDamageScreen();
   deathScreen.style.display = 'flex';
 
   if (currentRoom) {
-    update(ref(db, `rooms/${currentRoom}/players/${player.id}`), { hp: 0, isDead: true });
+    update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
+      hp: 0,
+      isDead: true,
+      deaths: player.deaths
+    });
+
+    // Reward Killer Kill Stat
+    if (killerId && killerId !== player.id) {
+      const killerRef = ref(db, `rooms/${currentRoom}/players/${killerId}`);
+      update(killerRef, {
+        kills: (allLobbyScores[killerId]?.kills || 0) + 1
+      });
+    }
+
+    // Reward Assists to other recent damagers within 8 seconds
+    const now = Date.now();
+    const assistCandidates = recentDamageDealers.filter(d => d.fromId !== killerId && d.fromId !== player.id && now - d.time < 8000);
+    const uniqueAssistIds = [...new Set(assistCandidates.map(a => a.fromId))];
+
+    uniqueAssistIds.forEach(assisterId => {
+      const aRef = ref(db, `rooms/${currentRoom}/players/${assisterId}`);
+      update(aRef, {
+        assists: (allLobbyScores[assisterId]?.assists || 0) + 1
+      });
+    });
   }
+
+  recentDamageDealers = [];
 
   let count = 3;
   respawnText.innerText = `RESPAWNING IN ${count}...`;
@@ -621,11 +752,9 @@ function respawn() {
   vignetteEl.style.background = 'rgba(255, 0, 30, 0)';
   vignetteEl.style.boxShadow = 'inset 0 0 75px 25px rgba(255, 30, 45, 0)';
 
-  const spawnX = (Math.random() - 0.5) * 20;
-  const spawnZ = 12 + Math.random() * 5;
-  const groundY = getGroundY(spawnX, spawnZ, 5);
-
-  camera.position.set(spawnX, groundY + EYE_HEIGHT, spawnZ);
+  const spawnX = (Math.random() - 0.5) * 40;
+  const spawnZ = (Math.random() - 0.5) * 40;
+  camera.position.set(spawnX, EYE_HEIGHT, spawnZ);
 
   if (currentRoom) {
     update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
@@ -650,23 +779,36 @@ function joinRoom(roomId, name) {
     document.getElementById('btn-gyro').style.display = 'none';
   }
 
-  const initialGroundY = getGroundY(camera.position.x, camera.position.z, 5);
-  camera.position.y = initialGroundY + EYE_HEIGHT;
-
   const playerRef = ref(db, `rooms/${roomId}/players/${player.id}`);
   set(playerRef, {
+    id: player.id,
     name: player.name,
     x: camera.position.x,
-    y: camera.position.y,
+    y: EYE_HEIGHT,
     z: camera.position.z,
     yaw: 0,
     hp: 100,
+    kills: 0,
+    deaths: 0,
+    assists: 0,
     isDead: false
   });
   onDisconnect(playerRef).remove();
 
+  // Sync All Lobby Players & Scoreboard
   onValue(ref(db, `rooms/${roomId}/players`), (snap) => {
     const list = snap.val() || {};
+    allLobbyScores = list;
+
+    // Update our own local KDA cache if database was incremented
+    if (list[player.id]) {
+      player.kills = list[player.id].kills || 0;
+      player.deaths = list[player.id].deaths || 0;
+      player.assists = list[player.id].assists || 0;
+    }
+
+    if (isScoreboardOpen) renderScoreboard();
+
     for (let id in list) {
       if (id === player.id) continue;
       const data = list[id];
@@ -677,7 +819,7 @@ function joinRoom(roomId, name) {
         remotePlayers[id] = mesh;
       }
       const pMesh = remotePlayers[id];
-      pMesh.position.lerp(new THREE.Vector3(data.x, data.y - EYE_HEIGHT, data.z), 0.35);
+      pMesh.position.lerp(new THREE.Vector3(data.x, 0, data.z), 0.35);
       pMesh.rotation.y = data.yaw;
 
       pMesh.isDead = !!data.isDead;
@@ -697,18 +839,21 @@ function joinRoom(roomId, name) {
     }
   });
 
+  // Damage intake listener
   onChildAdded(ref(db, `rooms/${roomId}/players/${player.id}/damage`), (snap) => {
     const hit = snap.val();
     remove(snap.ref);
     if (player.isDead) return;
+
+    recentDamageDealers.push({ fromId: hit.fromId, fromName: hit.fromName, time: hit.time || Date.now() });
 
     player.hp -= hit.amount;
     hpDisplay.innerText = Math.max(0, player.hp);
     triggerDamageScreen();
 
     if (player.hp <= 0) {
-      addKillFeed(`${hit.from} eliminated ${player.name}`);
-      die();
+      addKillFeed(`${hit.fromName} eliminated ${player.name}`);
+      die(hit.fromName, hit.fromId);
     }
   });
 }
@@ -733,7 +878,7 @@ document.getElementById('btn-join').addEventListener('touchend', handleJoin, { p
 document.getElementById('btn-join').addEventListener('click', handleJoin);
 
 /* =================================================================
-   9. MAIN ENGINE LOOP & PHYSICS
+   9. MAIN ENGINE LOOP & OPEN-WORLD PHYSICS
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
@@ -756,7 +901,7 @@ function animate(time) {
   camera.rotation.y = camYaw + player.recoilYaw;
   camera.rotation.x = camPitch + player.recoilPitch;
 
-  // Horizontal Inputs
+  // Resolve inputs
   let inputX = 0;
   let inputZ = 0;
 
@@ -770,7 +915,7 @@ function animate(time) {
     inputZ = joyInput.y;
   }
 
-  // Horizontal Movement & Bounding Clamping
+  // Horizontal Movement with Open-World Map Clamping
   if (!player.isDead && (Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05)) {
     const sinY = Math.sin(camYaw);
     const cosY = Math.cos(camYaw);
@@ -783,8 +928,8 @@ function animate(time) {
     const deltaX = (fwdX + strafeX) * moveSpeed * dt;
     const deltaZ = (fwdZ + strafeZ) * moveSpeed * dt;
 
-    const nextX = THREE.MathUtils.clamp(camera.position.x + deltaX, -MAP_BOUND_X, MAP_BOUND_X);
-    const nextZ = THREE.MathUtils.clamp(camera.position.z + deltaZ, -MAP_BOUND_Z, MAP_BOUND_Z);
+    const nextX = THREE.MathUtils.clamp(camera.position.x + deltaX, -MAP_BOUND, MAP_BOUND);
+    const nextZ = THREE.MathUtils.clamp(camera.position.z + deltaZ, -MAP_BOUND, MAP_BOUND);
 
     if (!checkCollision(nextX, camera.position.z)) {
       camera.position.x = nextX;
@@ -794,17 +939,13 @@ function animate(time) {
     }
   }
 
-  // Vertical Gravity & Ground Snapping
+  // Vertical Gravity & Floor Lock
   if (!player.isDead) {
-    const floorY = getGroundY(camera.position.x, camera.position.z, camera.position.y - EYE_HEIGHT);
-    const standingEyeY = floorY + EYE_HEIGHT;
-
     player.vy -= GRAVITY * dt;
     camera.position.y += player.vy * dt;
 
-    // Check Ground Collision
-    if (camera.position.y <= standingEyeY) {
-      camera.position.y = standingEyeY;
+    if (camera.position.y <= EYE_HEIGHT) {
+      camera.position.y = EYE_HEIGHT;
       player.vy = 0;
       player.isGrounded = true;
     } else {
@@ -812,7 +953,7 @@ function animate(time) {
     }
   }
 
-  // Network Sync (20 ticks/sec)
+  // Network Sync (20 updates/sec)
   if (currentRoom && time - lastNetworkSync > 50) {
     lastNetworkSync = time;
     update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
