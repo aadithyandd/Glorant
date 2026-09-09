@@ -5,13 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>V-STRIKE 3D</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- Three.js CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
   <!-- WebGL Render Canvas -->
   <canvas id="c"></canvas>
+
+  <!-- Damage Screen Vignette -->
+  <div id="damage-vignette"></div>
 
   <!-- Lobby Overlay -->
   <div id="lobby">
@@ -25,15 +27,46 @@
 
   <!-- In-game HUD -->
   <div id="hud">
+    <!-- Top-Right Controls & Feeds (Safe from Left Joystick) -->
+    <div class="top-bar">
+      <button id="btn-gyro" class="hud-pill">GYRO: OFF</button>
+      <div id="killfeed"></div>
+    </div>
+
+    <!-- Valorant Crosshair -->
     <div id="crosshair">
       <div class="ch-line ch-t"></div>
       <div class="ch-line ch-b"></div>
       <div class="ch-line ch-l"></div>
       <div class="ch-line ch-r"></div>
+      <div class="ch-dot"></div>
     </div>
-    
-    <div id="killfeed"></div>
 
+    <!-- Death Banner -->
+    <div id="death-screen">
+      <div class="elim-title">ELIMINATED</div>
+      <div class="respawn-timer" id="respawn-text">RESPAWNING IN 3...</div>
+    </div>
+
+    <!-- Bottom Stat HUD -->
+    <div class="bottom-hud">
+      <div class="stat-box">HP <span id="hp-val" class="hp-val">100</span></div>
+      <div class="stat-box">AMMO <span id="ammo-val" class="ammo-val">25/25</span></div>
+    </div>
+  </div>
+
+  <!-- Mobile Touch Zones -->
+  <div id="move-zone" class="touch-zone"></div>
+  <div id="look-zone" class="touch-zone"></div>
+  <div id="joystick-base"><div id="joystick-stick"></div></div>
+
+  <!-- Mobile Action Buttons -->
+  <button id="btn-fire" class="action-btn">FIRE</button>
+  <button id="btn-reload" class="action-btn">R</button>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
     <div id="death-screen">
       <div class="elim-title">ELIMINATED</div>
       <div class="respawn-timer" id="respawn-text">RESPAWNING IN 3...</div>
