@@ -30,7 +30,7 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 /* =================================================================
-   2. AUDIO PLAYER & FOOTSTEPS
+   2. AUDIO ENGINE & CUSTOM SOUNDS
    ================================================================= */
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
@@ -40,10 +40,13 @@ function ensureAudio() {
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
+// User-supplied audio files
 const audioDash = new Audio('dash.wav');
 const audioShoot = new Audio('shoot.wav');
 const audioWalk = new Audio('walk.wav');
 audioWalk.loop = true;
+const audioReload = new Audio('reload.wav');
+const audioKnife = new Audio('knife.wav');
 
 const killAudios = [
   new Audio('1.wav'),
@@ -129,19 +132,20 @@ const SoundFx = {
   },
 
   knifeSlash() {
-    ensureAudio();
-    const t = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(650, t);
-    osc.frequency.exponentialRampToValueAtTime(120, t + 0.12);
-    gain.gain.setValueAtTime(0.25, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(t);
-    osc.stop(t + 0.12);
+    playSound(audioKnife, () => {
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(650, t);
+      osc.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+      gain.gain.setValueAtTime(0.25, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.12);
+    });
   },
 
   knifeHit() {
@@ -161,35 +165,20 @@ const SoundFx = {
   },
 
   reload() {
-    ensureAudio();
-    const t = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(350, t);
-    osc.frequency.setValueAtTime(480, t + 0.1);
-    gain.gain.setValueAtTime(0.12, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(t);
-    osc.stop(t + 0.25);
-  },
-
-  jump() {
-    ensureAudio();
-    const t = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(160, t);
-    osc.frequency.exponentialRampToValueAtTime(320, t + 0.14);
-    gain.gain.setValueAtTime(0.2, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start(t);
-    osc.stop(t + 0.14);
+    playSound(audioReload, () => {
+      const t = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(350, t);
+      osc.frequency.setValueAtTime(480, t + 0.1);
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.25);
+    });
   },
 
   land() {
@@ -260,8 +249,12 @@ scene.fog = new THREE.FogExp2('#0b1219', 0.005);
 const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, 1000);
 camera.rotation.order = 'YXZ';
 
-const EYE_HEIGHT = 1.6;
-camera.position.set(0, EYE_HEIGHT, 15);
+const STAND_EYE_HEIGHT = 1.6;
+const CROUCH_EYE_HEIGHT = 1.05;
+let targetEyeHeight = STAND_EYE_HEIGHT;
+let currentEyeHeight = STAND_EYE_HEIGHT;
+
+camera.position.set(0, STAND_EYE_HEIGHT, 15);
 scene.add(camera);
 
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
@@ -275,7 +268,7 @@ sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
 /* =================================================================
-   4. WEAPON RIGS & FLIPPED UPSIDE-DOWN KARAMBIT
+   4. WEAPON RIGS & FLIPPED KARAMBIT (RING BOTTOM, BLADE UP)
    ================================================================= */
 const gunPivot = new THREE.Group();
 gunPivot.frustumCulled = false;
@@ -308,33 +301,32 @@ muzzleFlash.frustumCulled = false;
 rifleGroup.add(muzzleFlash);
 gunPivot.add(rifleGroup);
 
-// REPOSITIONED & FLIPPED KARAMBIT RIG
+// REPOSITIONED & FLIPPED KARAMBIT (SOUTH TO NORTH)
 const karambitHolder = new THREE.Group();
-karambitHolder.position.set(0.22, -0.20, -0.42);
-karambitHolder.rotation.set(-0.15, -0.2, 0.1);
+karambitHolder.position.set(0.23, -0.21, -0.45);
+karambitHolder.rotation.set(0.1, -0.15, -0.05);
 karambitHolder.visible = false;
 gunPivot.add(karambitHolder);
 
-// Smaller, sleek tactical glove (fist)
+// Small glove mesh
 const handMat = new THREE.MeshLambertMaterial({ color: 0x14181c });
-const fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.085, 0.095), handMat);
-fistMesh.position.set(0.02, -0.04, 0.03);
+const fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.075, 0.085), handMat);
+fistMesh.position.set(0.01, -0.06, 0.02);
 karambitHolder.add(fistMesh);
 
-// Blade Container (flips & spins)
 const bladeContainer = new THREE.Group();
 karambitHolder.add(bladeContainer);
 
-// Larger, upside-down procedural fallback blade
+// Procedural fallback blade: ring at bottom, claw points upward/forward
 const ringHandle = new THREE.Mesh(
   new THREE.TorusGeometry(0.065, 0.016, 8, 24),
   new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.85, roughness: 0.2 })
 );
-ringHandle.position.set(-0.01, 0.05, -0.04);
+ringHandle.position.set(0.01, -0.05, -0.04);
 bladeContainer.add(ringHandle);
 
 const bladeBody = new THREE.Mesh(
-  new THREE.TorusGeometry(0.25, 0.034, 8, 28, Math.PI * 0.72),
+  new THREE.TorusGeometry(0.26, 0.035, 8, 28, Math.PI * 0.72),
   new THREE.MeshStandardMaterial({
     color: 0x660099,
     emissive: 0x330044,
@@ -342,9 +334,9 @@ const bladeBody = new THREE.Mesh(
     roughness: 0.15
   })
 );
-// Inverted/Flipped upside down
-bladeBody.rotation.set(-Math.PI / 2, Math.PI, -Math.PI / 3.2);
-bladeBody.position.set(-0.04, 0.07, -0.16);
+// Inverted North to South: blade now curves upward
+bladeBody.rotation.set(Math.PI / 2, 0, Math.PI * 0.7);
+bladeBody.position.set(-0.02, 0.08, -0.15);
 bladeContainer.add(bladeBody);
 
 // Load reaver_karambit.glb
@@ -354,16 +346,16 @@ if (typeof THREE.GLTFLoader !== 'undefined') {
     'reaver_karambit.glb',
     (gltf) => {
       const kModel = gltf.scene;
-      // Slightly larger scale and flipped 180 deg upside down
-      kModel.scale.set(0.68, 0.68, 0.68);
-      kModel.position.set(-0.02, 0.05, -0.12);
-      kModel.rotation.set(-Math.PI * 0.1, -Math.PI * 0.35, Math.PI * 0.8);
+      kModel.scale.set(0.72, 0.72, 0.72);
+      kModel.position.set(0.0, 0.02, -0.1);
+      // Flipped North to South (Z & X rotation inverted 180 degrees)
+      kModel.rotation.set(Math.PI * 0.1, Math.PI * 0.65, -Math.PI * 0.2);
       bladeContainer.remove(bladeBody);
       bladeContainer.remove(ringHandle);
       bladeContainer.add(kModel);
     },
     undefined,
-    () => { console.log("Using procedural large upside-down Reaver Karambit."); }
+    () => { console.log("Using procedural flipped Reaver Karambit."); }
   );
 }
 
@@ -373,6 +365,11 @@ let karambitSpinAngle = 0;
 
 let currentWeapon = 'rifle';
 let isScoped = false;
+let isCrouching = false;
+
+// Smooth Reload Animation State (dip down & return up)
+let reloadAnimProgress = 0;
+
 const scopeOverlay = document.getElementById('scope-overlay');
 const slotDisplay = document.getElementById('slot-val');
 const btnSwapWeapon = document.getElementById('btn-swap-weapon');
@@ -567,7 +564,7 @@ function updateTracers(dt) {
 }
 
 /* =================================================================
-   7. ENEMY MODEL RIG & PRECISE HITBOXES
+   7. EYELESS ENEMY RIG WITH EXPLICIT AIM DIRECTION
    ================================================================= */
 function createNameTagSprite(name) {
   const c = document.createElement('canvas');
@@ -605,41 +602,42 @@ function createHighVisEnemy(name) {
 
   const suitMat = new THREE.MeshLambertMaterial({ color: 0x1a2128 });
   const enemyRedMat = new THREE.MeshLambertMaterial({ color: 0xff1e38 });
-  const glowVisorMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc });
+  const gunBarrelMat = new THREE.MeshLambertMaterial({ color: 0x0a0c0f });
 
-  // Torso / Body Hitbox
+  // Torso
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.65, 0.36), enemyRedMat);
   chest.position.y = 1.15;
   chest.castShadow = true;
   chest.hitZone = 'body';
   modelRoot.add(chest);
 
-  // Head Hitbox
+  // Head without eyes/visor
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.35, 0.32), suitMat);
   head.position.y = 1.68;
   head.castShadow = true;
   head.hitZone = 'head';
   modelRoot.add(head);
 
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.1, 0.12), glowVisorMat);
-  visor.position.set(0, 1.7, 0.16);
-  visor.hitZone = 'head';
-  modelRoot.add(visor);
-
-  // Arms
+  // Arms holding gun pointing forward
   const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), suitMat);
-  lArm.position.set(-0.38, 1.15, 0.1);
-  lArm.rotation.x = -Math.PI / 4;
+  lArm.position.set(-0.35, 1.15, 0.15);
+  lArm.rotation.x = -Math.PI / 3;
   lArm.hitZone = 'body';
   modelRoot.add(lArm);
 
   const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), suitMat);
-  rArm.position.set(0.38, 1.15, 0.1);
-  rArm.rotation.x = -Math.PI / 4;
+  rArm.position.set(0.35, 1.15, 0.15);
+  rArm.rotation.x = -Math.PI / 3;
   rArm.hitZone = 'body';
   modelRoot.add(rArm);
 
-  // Legs Hitbox
+  // Prominent rifle pointing in facing direction
+  const rifle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.8), gunBarrelMat);
+  rifle.position.set(0.18, 1.1, 0.5);
+  rifle.hitZone = 'body';
+  modelRoot.add(rifle);
+
+  // Legs
   const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, 0.24), suitMat);
   lLeg.position.set(-0.17, 0.4, 0);
   lLeg.castShadow = true;
@@ -662,12 +660,11 @@ function createHighVisEnemy(name) {
 }
 
 /* =================================================================
-   8. INPUTS, LOCALSTORAGE SENSITIVITY & PING
+   8. INPUTS, CROUCH ACCURACY & PING
    ================================================================= */
 let platformMode = 'mobile';
 let gameMode = 'online';
 
-// Read sensitivity from localStorage
 const storedSens = localStorage.getItem('vstrike_sens');
 let userSensitivity = storedSens ? parseFloat(storedSens) : 1.0;
 
@@ -676,14 +673,12 @@ const sensLabel = document.getElementById('sens-label');
 sensSlider.value = userSensitivity;
 sensLabel.innerText = `SENS: ${userSensitivity.toFixed(2)}x`;
 
-// Save to localStorage on change
 sensSlider.addEventListener('input', (e) => {
   userSensitivity = parseFloat(e.target.value);
   sensLabel.innerText = `SENS: ${userSensitivity.toFixed(2)}x`;
   localStorage.setItem('vstrike_sens', userSensitivity.toString());
 });
 
-// Live Ping Meter
 const pingDisplay = document.getElementById('ping-val');
 function measurePing() {
   if (gameMode !== 'online' || !currentRoom) {
@@ -937,7 +932,6 @@ function triggerJump() {
   if (player.isGrounded && !player.isDead) {
     player.vy = 8.5;
     player.isGrounded = false;
-    SoundFx.jump();
   }
 }
 
@@ -947,6 +941,13 @@ window.addEventListener('keydown', (e) => {
   if (k === 't') {
     e.preventDefault();
     toggleScoreboard();
+    return;
+  }
+
+  // Hold Left-Ctrl to Crouch
+  if (e.code === 'ControlLeft') {
+    isCrouching = true;
+    targetEyeHeight = CROUCH_EYE_HEIGHT;
     return;
   }
 
@@ -972,6 +973,14 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
   const k = e.key.toLowerCase();
+
+  // Release Ctrl to Stand
+  if (e.code === 'ControlLeft') {
+    isCrouching = false;
+    targetEyeHeight = STAND_EYE_HEIGHT;
+    return;
+  }
+
   if (e.code === 'KeyW' || k === 'w' || e.code === 'ArrowUp') keys.forward = false;
   if (e.code === 'KeyS' || k === 's' || e.code === 'ArrowDown') keys.backward = false;
   if (e.code === 'KeyA' || k === 'a' || e.code === 'ArrowLeft') keys.left = false;
@@ -1101,7 +1110,7 @@ document.getElementById('btn-dash').addEventListener('touchstart', (e) => {
   triggerDash();
 }, { passive: false });
 
-// Gyroscope
+// Mobile Gyroscope
 let gyroActive = false;
 let lastGamma = null;
 let lastBeta = null;
@@ -1154,7 +1163,7 @@ function checkCollision(targetX, targetZ) {
 }
 
 /* =================================================================
-   9. ATTACK SYSTEM, 1-TAP HEADSHOT & SPRAY RECOIL
+   9. ATTACK SYSTEM, 1-TAP HEADSHOT & CROUCH ACCURACY
    ================================================================= */
 const vignetteEl = document.getElementById('damage-vignette');
 const raycaster = new THREE.Raycaster();
@@ -1172,15 +1181,14 @@ function triggerDamageScreen() {
   }, 200);
 }
 
-// Exact Hitbox Damage (1-Shot Headshots)
 function calculateShotDamage(hitObject, hitPoint, targetMesh) {
   const localY = hitPoint.y - targetMesh.position.y;
   if (hitObject.hitZone === 'head' || localY >= 1.45) {
-    return 150; // 1-shot kill (Headshot)
+    return 150; // 1-shot elimination
   } else if (hitObject.hitZone === 'legs' || localY < 0.75) {
-    return 16; // 7 shots (Legs)
+    return 16;
   } else {
-    return 25; // 4-5 shots (Body)
+    return 25;
   }
 }
 
@@ -1249,16 +1257,19 @@ function executeSingleShot() {
   lastShotTime = performance.now();
   continuousShots++;
 
-  // Anti-spray tap firing model
+  // CROUCH SPREAD MODIFIER: 60% less spread when crouching
+  const crouchSpreadMult = isCrouching ? 0.4 : 1.0;
   let spreadAmount = 0;
   if (continuousShots > 2) {
-    spreadAmount = Math.min(0.045, (continuousShots - 2) * 0.005);
+    spreadAmount = Math.min(0.045, (continuousShots - 2) * 0.005) * crouchSpreadMult;
   }
 
   const spreadX = (Math.random() - 0.5) * spreadAmount;
   const spreadY = (Math.random() - 0.5) * spreadAmount;
 
-  const recoilMult = isScoped ? 0.4 : 1.0;
+  // Crouch recoil reduction
+  const crouchRecoilMult = isCrouching ? 0.6 : 1.0;
+  const recoilMult = (isScoped ? 0.4 : 1.0) * crouchRecoilMult;
   player.recoilPitch += (0.018 + Math.min(0.02, continuousShots * 0.002)) * recoilMult;
   player.recoilYaw += ((Math.random() - 0.5) * 0.015) * recoilMult;
   gunPivot.position.z += 0.04;
@@ -1339,6 +1350,7 @@ function executeSingleShot() {
   spawnTracer(muzzleWorld, endPoint);
 }
 
+// SMOOTH RELOAD DIPPING ANIMATION
 function triggerReload() {
   if (currentWeapon === 'knife' || player.isReloading || player.ammo === player.maxAmmo || player.isDead) return;
   if (isScoped) toggleScope();
@@ -1347,13 +1359,24 @@ function triggerReload() {
   ammoDisplay.innerText = `RELOAD...`;
   SoundFx.reload();
 
-  gunPivot.position.y = -0.22;
-  setTimeout(() => {
-    player.ammo = player.maxAmmo;
-    player.isReloading = false;
-    gunPivot.position.y = 0;
-    ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
-  }, 1200);
+  const reloadDuration = 1200; // ms
+  const reloadStart = performance.now();
+
+  const reloadInterval = setInterval(() => {
+    const elapsed = performance.now() - reloadStart;
+    const p = Math.min(1.0, elapsed / reloadDuration);
+
+    // Dip down and return smoothly
+    reloadAnimProgress = Math.sin(p * Math.PI);
+
+    if (p >= 1.0) {
+      clearInterval(reloadInterval);
+      reloadAnimProgress = 0;
+      player.ammo = player.maxAmmo;
+      player.isReloading = false;
+      ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
+    }
+  }, 16);
 }
 
 document.getElementById('btn-fire').addEventListener('touchstart', (e) => {
@@ -1430,7 +1453,7 @@ function respawn() {
 
   const spawnX = (Math.random() - 0.5) * 30;
   const spawnZ = (Math.random() - 0.5) * 30;
-  camera.position.set(spawnX, EYE_HEIGHT, spawnZ);
+  camera.position.set(spawnX, STAND_EYE_HEIGHT, spawnZ);
 
   if (gameMode === 'online' && currentRoom) {
     update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
@@ -1481,7 +1504,7 @@ async function joinRoom(roomId, name) {
     id: player.id,
     name: player.name,
     x: camera.position.x,
-    y: EYE_HEIGHT,
+    y: STAND_EYE_HEIGHT,
     z: camera.position.z,
     yaw: 0,
     hp: 100,
@@ -1577,11 +1600,12 @@ document.getElementById('btn-join').addEventListener('touchend', handleJoin, { p
 document.getElementById('btn-join').addEventListener('click', handleJoin);
 
 /* =================================================================
-   11. ENGINE LOOP & ANIMATIONS
+   11. MAIN ENGINE LOOP, CROUCH INTERPOLATION & DIPPING RELOAD
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
-const moveSpeed = 8.5;
+const STAND_SPEED = 8.5;
+const CROUCH_SPEED = 4.2;
 const GRAVITY = 24.0;
 
 let lastSentX = 0;
@@ -1602,7 +1626,19 @@ function animate(time) {
     updateOfflineBots(dt);
   }
 
-  // Karambit Spin Attack
+  // Full-Auto Spray
+  if (isFiringHeld && currentWeapon === 'rifle' && !player.isDead) {
+    if (time - lastShotTime >= FIRE_RATE_DELAY) {
+      executeSingleShot();
+    }
+  }
+
+  // Spray reset
+  if (!isFiringHeld && time - lastShotTime > 350) {
+    continuousShots = 0;
+  }
+
+  // Smooth Karambit Spin Attack
   if (isSpinningKarambit) {
     karambitSpinAngle += dt * 19.0;
     bladeContainer.rotation.z = -karambitSpinAngle;
@@ -1612,16 +1648,23 @@ function animate(time) {
     }
   }
 
-  // Smooth ADS Zoom
+  // Smooth Scope FOV
   const targetFov = isScoped ? 28 : 72;
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.22);
   camera.updateProjectionMatrix();
 
-  // Recoil
+  // Smooth Eye Height Transition (Crouch / Stand)
+  currentEyeHeight = THREE.MathUtils.lerp(currentEyeHeight, targetEyeHeight, 0.2);
+
+  // Recoil decay
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
 
+  // RELOAD WEAPON DIPPING ANIMATION: smoothly dips down -0.35m
+  const reloadDipY = -reloadAnimProgress * 0.35;
+  gunPivot.position.y = THREE.MathUtils.lerp(gunPivot.position.y, reloadDipY, 0.25);
   gunPivot.position.z = THREE.MathUtils.lerp(gunPivot.position.z, 0, 0.2);
+
   camera.rotation.y = camYaw + player.recoilYaw;
   camera.rotation.x = camPitch + player.recoilPitch;
 
@@ -1641,30 +1684,18 @@ function animate(time) {
 
   const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05;
 
-  // STRICT WALK AUDIO CONTROL: Stop immediately when released
+  // STRICT WALK SOUND: Stop immediately when released
   if (isMoving && player.isGrounded && !player.isDead) {
     SoundFx.startWalk();
     const bobFactor = isScoped ? 0.0008 : 0.004;
-    gunPivot.position.y = Math.sin(time * 0.012) * bobFactor;
-    gunPivot.position.x = Math.cos(time * 0.006) * (bobFactor * 0.6);
+    gunPivot.position.y += Math.sin(time * 0.012) * bobFactor;
+    gunPivot.position.x += Math.cos(time * 0.006) * (bobFactor * 0.6);
   } else {
     SoundFx.stopWalk();
-    gunPivot.position.y = Math.sin(time * 0.003) * 0.0004;
+    gunPivot.position.y += Math.sin(time * 0.003) * 0.0004;
   }
 
-  // Full-Auto Spray loop
-  if (isFiringHeld && currentWeapon === 'rifle' && !player.isDead) {
-    if (time - lastShotTime >= FIRE_RATE_DELAY) {
-      executeSingleShot();
-    }
-  }
-
-  // Anti-spray reset
-  if (!isFiringHeld && time - lastShotTime > 350) {
-    continuousShots = 0;
-  }
-
-  // Dash & Walk
+  // Dash & Movement
   if (dashDuration > 0) {
     dashDuration -= dt;
     const dX = THREE.MathUtils.clamp(camera.position.x + dashVelocity.x * dt, -MAP_BOUND, MAP_BOUND);
@@ -1681,7 +1712,8 @@ function animate(time) {
     const strafeX = cosY * inputX;
     const strafeZ = -sinY * inputX;
 
-    const currentSpeed = isScoped ? moveSpeed * 0.55 : moveSpeed;
+    const baseSpeed = isCrouching ? CROUCH_SPEED : STAND_SPEED;
+    const currentSpeed = isScoped ? baseSpeed * 0.55 : baseSpeed;
     const deltaX = (fwdX + strafeX) * currentSpeed * dt;
     const deltaZ = (fwdZ + strafeZ) * currentSpeed * dt;
 
@@ -1696,14 +1728,14 @@ function animate(time) {
     }
   }
 
-  // Gravity
+  // Gravity & Crouch Eye Level
   if (!player.isDead) {
     const wasInAir = !player.isGrounded;
     player.vy -= GRAVITY * dt;
     camera.position.y += player.vy * dt;
 
-    if (camera.position.y <= EYE_HEIGHT) {
-      camera.position.y = EYE_HEIGHT;
+    if (camera.position.y <= currentEyeHeight) {
+      camera.position.y = currentEyeHeight;
       player.vy = 0;
       player.isGrounded = true;
       if (wasInAir) SoundFx.land();
@@ -1712,7 +1744,7 @@ function animate(time) {
     }
   }
 
-  // Smooth Interpolation of Remote Players
+  // Network Sync
   if (gameMode === 'online') {
     for (let id in remotePlayers) {
       const p = remotePlayers[id];
