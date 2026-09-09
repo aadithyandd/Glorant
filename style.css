@@ -40,7 +40,7 @@ body, html {
   position: absolute;
   inset: 0;
   z-index: 45;
-  background: rgba(10, 14, 20, 0.75);
+  background: rgba(10, 14, 20, 0.85);
   backdrop-filter: blur(6px);
   display: none;
   align-items: center;
@@ -56,7 +56,7 @@ body, html {
   box-shadow: 0 0 25px rgba(255, 70, 85, 0.3);
 }
 .sb-header {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 900;
   letter-spacing: 2px;
   color: #ff4655;
