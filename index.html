@@ -13,7 +13,7 @@
   <!-- WebGL Render Canvas -->
   <canvas id="c"></canvas>
 
-  <!-- Lobby / Room UI -->
+  <!-- Lobby Overlay -->
   <div id="lobby">
     <div class="title">V-STRIKE</div>
     <div class="card">
@@ -31,23 +31,32 @@
       <div class="ch-line ch-l"></div>
       <div class="ch-line ch-r"></div>
     </div>
+    
     <div id="killfeed"></div>
+
+    <div id="death-screen">
+      <div class="elim-title">ELIMINATED</div>
+      <div class="respawn-timer" id="respawn-text">RESPAWNING IN 3...</div>
+    </div>
+
+    <!-- Gyroscope Status / Toggle Button -->
+    <button id="btn-gyro" class="hud-pill">GYRO: OFF</button>
+
     <div class="bottom-hud">
       <div class="stat-box">HP <span id="hp-val" class="hp-val">100</span></div>
       <div class="stat-box">AMMO <span id="ammo-val" class="ammo-val">25/25</span></div>
     </div>
   </div>
 
-  <!-- Mobile Controls Layer -->
+  <!-- Touch Controls -->
   <div id="move-zone" class="touch-zone"></div>
   <div id="look-zone" class="touch-zone"></div>
   <div id="joystick-base"><div id="joystick-stick"></div></div>
 
-  <!-- Touch Action Buttons -->
+  <!-- Action Buttons -->
   <button id="btn-fire" class="action-btn">FIRE</button>
   <button id="btn-reload" class="action-btn">R</button>
 
-  <!-- Main Game Engine Script -->
   <script type="module" src="script.js"></script>
 </body>
 </html>
