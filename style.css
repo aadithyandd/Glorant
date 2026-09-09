@@ -85,10 +85,8 @@ input {
   letter-spacing: 1px;
   touch-action: auto !important;
 }
-
 input:focus { border-color: #ff4655; }
 
-/* PLATFORM SELECTOR BUTTONS */
 .platform-toggle {
   display: flex;
   gap: 8px;
