@@ -275,7 +275,7 @@ sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
 /* =================================================================
-   4. WEAPON RIGS & VISIBLE REAVER KARAMBIT
+   4. WEAPON RIGS & FLIPPED UPSIDE-DOWN KARAMBIT
    ================================================================= */
 const gunPivot = new THREE.Group();
 gunPivot.frustumCulled = false;
@@ -308,34 +308,33 @@ muzzleFlash.frustumCulled = false;
 rifleGroup.add(muzzleFlash);
 gunPivot.add(rifleGroup);
 
-// KARAMBIT RIG
+// REPOSITIONED & FLIPPED KARAMBIT RIG
 const karambitHolder = new THREE.Group();
-// Placed clearly inside camera view frustum
-karambitHolder.position.set(0.25, -0.22, -0.45);
-karambitHolder.rotation.set(-0.1, -0.3, 0.25);
+karambitHolder.position.set(0.22, -0.20, -0.42);
+karambitHolder.rotation.set(-0.15, -0.2, 0.1);
 karambitHolder.visible = false;
 gunPivot.add(karambitHolder);
 
-// First-person black glove
-const handMat = new THREE.MeshLambertMaterial({ color: 0x15181c });
-const fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.14, 0.16), handMat);
-fistMesh.position.set(0, -0.05, 0.05);
+// Smaller, sleek tactical glove (fist)
+const handMat = new THREE.MeshLambertMaterial({ color: 0x14181c });
+const fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.085, 0.095), handMat);
+fistMesh.position.set(0.02, -0.04, 0.03);
 karambitHolder.add(fistMesh);
 
-// Blade Container (Spins on melee)
+// Blade Container (flips & spins)
 const bladeContainer = new THREE.Group();
 karambitHolder.add(bladeContainer);
 
-// High-detail curved Reaver blade
+// Larger, upside-down procedural fallback blade
 const ringHandle = new THREE.Mesh(
-  new THREE.TorusGeometry(0.05, 0.015, 8, 20),
-  new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.2 })
+  new THREE.TorusGeometry(0.065, 0.016, 8, 24),
+  new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.85, roughness: 0.2 })
 );
-ringHandle.position.set(0, 0.04, -0.05);
+ringHandle.position.set(-0.01, 0.05, -0.04);
 bladeContainer.add(ringHandle);
 
 const bladeBody = new THREE.Mesh(
-  new THREE.TorusGeometry(0.18, 0.026, 8, 24, Math.PI * 0.75),
+  new THREE.TorusGeometry(0.25, 0.034, 8, 28, Math.PI * 0.72),
   new THREE.MeshStandardMaterial({
     color: 0x660099,
     emissive: 0x330044,
@@ -343,26 +342,28 @@ const bladeBody = new THREE.Mesh(
     roughness: 0.15
   })
 );
-bladeBody.rotation.set(Math.PI / 2, 0, Math.PI / 3);
-bladeBody.position.set(-0.06, 0.08, -0.14);
+// Inverted/Flipped upside down
+bladeBody.rotation.set(-Math.PI / 2, Math.PI, -Math.PI / 3.2);
+bladeBody.position.set(-0.04, 0.07, -0.16);
 bladeContainer.add(bladeBody);
 
-// Load reaver_karambit.glb if present in folder
+// Load reaver_karambit.glb
 if (typeof THREE.GLTFLoader !== 'undefined') {
   const kLoader = new THREE.GLTFLoader();
   kLoader.load(
     'reaver_karambit.glb',
     (gltf) => {
       const kModel = gltf.scene;
-      kModel.scale.set(0.55, 0.55, 0.55);
-      kModel.position.set(-0.02, 0.03, -0.1);
-      kModel.rotation.set(Math.PI * 0.9, -Math.PI * 0.35, -Math.PI * 0.2);
+      // Slightly larger scale and flipped 180 deg upside down
+      kModel.scale.set(0.68, 0.68, 0.68);
+      kModel.position.set(-0.02, 0.05, -0.12);
+      kModel.rotation.set(-Math.PI * 0.1, -Math.PI * 0.35, Math.PI * 0.8);
       bladeContainer.remove(bladeBody);
       bladeContainer.remove(ringHandle);
       bladeContainer.add(kModel);
     },
     undefined,
-    () => { console.log("Using built-in procedural Reaver Karambit."); }
+    () => { console.log("Using procedural large upside-down Reaver Karambit."); }
   );
 }
 
@@ -661,23 +662,29 @@ function createHighVisEnemy(name) {
 }
 
 /* =================================================================
-   8. INPUTS, PING & FULL-AUTO SPRAY ENGINE
+   8. INPUTS, LOCALSTORAGE SENSITIVITY & PING
    ================================================================= */
 let platformMode = 'mobile';
 let gameMode = 'online';
-let userSensitivity = 1.0;
+
+// Read sensitivity from localStorage
+const storedSens = localStorage.getItem('vstrike_sens');
+let userSensitivity = storedSens ? parseFloat(storedSens) : 1.0;
 
 const sensSlider = document.getElementById('sens-slider');
 const sensLabel = document.getElementById('sens-label');
+sensSlider.value = userSensitivity;
+sensLabel.innerText = `SENS: ${userSensitivity.toFixed(2)}x`;
+
+// Save to localStorage on change
 sensSlider.addEventListener('input', (e) => {
   userSensitivity = parseFloat(e.target.value);
   sensLabel.innerText = `SENS: ${userSensitivity.toFixed(2)}x`;
+  localStorage.setItem('vstrike_sens', userSensitivity.toString());
 });
 
 // Live Ping Meter
 const pingDisplay = document.getElementById('ping-val');
-let lastPingTime = 0;
-
 function measurePing() {
   if (gameMode !== 'online' || !currentRoom) {
     pingDisplay.innerText = 'OFFLINE';
@@ -740,11 +747,10 @@ let recentDamageDealers = [];
 let camYaw = 0;
 let camPitch = 0;
 
-// VALORANT RECOIL & SPRAY STATE
 let isFiringHeld = false;
 let continuousShots = 0;
 let lastShotTime = 0;
-const FIRE_RATE_DELAY = 100; // ~600 RPM
+const FIRE_RATE_DELAY = 100;
 
 function spawnOfflineBot(id) {
   const name = `BOT ${id + 1}`;
@@ -893,6 +899,7 @@ document.querySelectorAll('.plat-btn').forEach(btn => {
   });
 });
 
+// Scoreboard Modal Logic (T Key)
 const sbModal = document.getElementById('scoreboard-modal');
 const sbRows = document.getElementById('sb-rows');
 let isScoreboardOpen = false;
@@ -923,7 +930,7 @@ document.getElementById('btn-tab-toggle').addEventListener('click', (e) => {
   toggleScoreboard();
 });
 
-// PC Keyboard Controls
+// PC Keyboard
 const keys = { forward: false, backward: false, left: false, right: false };
 
 function triggerJump() {
@@ -1094,7 +1101,7 @@ document.getElementById('btn-dash').addEventListener('touchstart', (e) => {
   triggerDash();
 }, { passive: false });
 
-// Mobile Gyroscope
+// Gyroscope
 let gyroActive = false;
 let lastGamma = null;
 let lastBeta = null;
@@ -1147,7 +1154,7 @@ function checkCollision(targetX, targetZ) {
 }
 
 /* =================================================================
-   9. ATTACK SYSTEM, 1-TAP ACCURACY & SPRAY RECOIL
+   9. ATTACK SYSTEM, 1-TAP HEADSHOT & SPRAY RECOIL
    ================================================================= */
 const vignetteEl = document.getElementById('damage-vignette');
 const raycaster = new THREE.Raycaster();
@@ -1165,7 +1172,7 @@ function triggerDamageScreen() {
   }, 200);
 }
 
-// 1-Shot Headshots, 5-Shot Body, 7-Shot Legs
+// Exact Hitbox Damage (1-Shot Headshots)
 function calculateShotDamage(hitObject, hitPoint, targetMesh) {
   const localY = hitPoint.y - targetMesh.position.y;
   if (hitObject.hitZone === 'head' || localY >= 1.45) {
@@ -1242,8 +1249,7 @@ function executeSingleShot() {
   lastShotTime = performance.now();
   continuousShots++;
 
-  // ANTI-SPRAY & RECOIL SPREAD MODEL:
-  // First 1-2 shots have ZERO spread (pure one-tap accuracy)
+  // Anti-spray tap firing model
   let spreadAmount = 0;
   if (continuousShots > 2) {
     spreadAmount = Math.min(0.045, (continuousShots - 2) * 0.005);
@@ -1252,7 +1258,6 @@ function executeSingleShot() {
   const spreadX = (Math.random() - 0.5) * spreadAmount;
   const spreadY = (Math.random() - 0.5) * spreadAmount;
 
-  // Recoil impulse climbs during spray
   const recoilMult = isScoped ? 0.4 : 1.0;
   player.recoilPitch += (0.018 + Math.min(0.02, continuousShots * 0.002)) * recoilMult;
   player.recoilYaw += ((Math.random() - 0.5) * 0.015) * recoilMult;
@@ -1264,7 +1269,6 @@ function executeSingleShot() {
   const muzzleWorld = new THREE.Vector3();
   muzzleFlash.getWorldPosition(muzzleWorld);
 
-  // Shoot through crosshair + spread offset
   raycaster.setFromCamera(new THREE.Vector2(spreadX, spreadY), camera);
 
   if (gameMode === 'offline') {
@@ -1352,7 +1356,6 @@ function triggerReload() {
   }, 1200);
 }
 
-// Mobile Fire Button Spray
 document.getElementById('btn-fire').addEventListener('touchstart', (e) => {
   e.preventDefault();
   isFiringHeld = true;
@@ -1370,7 +1373,7 @@ document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 /* =================================================================
-   10. MULTIPLAYER ROOMS, LAG FIX & SYNC
+   10. MULTIPLAYER ROOMS & RESPAWN
    ================================================================= */
 const deathScreen = document.getElementById('death-screen');
 const respawnText = document.getElementById('respawn-text');
@@ -1574,7 +1577,7 @@ document.getElementById('btn-join').addEventListener('touchend', handleJoin, { p
 document.getElementById('btn-join').addEventListener('click', handleJoin);
 
 /* =================================================================
-   11. MAIN ENGINE LOOP & PROCEDURAL WEAPONS
+   11. ENGINE LOOP & ANIMATIONS
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
@@ -1599,18 +1602,6 @@ function animate(time) {
     updateOfflineBots(dt);
   }
 
-  // Full-Auto Spray Loop while Holding Trigger
-  if (isFiringHeld && currentWeapon === 'rifle' && !player.isDead) {
-    if (time - lastShotTime >= FIRE_RATE_DELAY) {
-      executeSingleShot();
-    }
-  }
-
-  // Spray recovery reset when player stops firing
-  if (!isFiringHeld && time - lastShotTime > 350) {
-    continuousShots = 0;
-  }
-
   // Karambit Spin Attack
   if (isSpinningKarambit) {
     karambitSpinAngle += dt * 19.0;
@@ -1621,12 +1612,12 @@ function animate(time) {
     }
   }
 
-  // Smooth Scope FOV
+  // Smooth ADS Zoom
   const targetFov = isScoped ? 28 : 72;
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.22);
   camera.updateProjectionMatrix();
 
-  // Recoil decay & spring recovery
+  // Recoil
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
 
@@ -1650,15 +1641,27 @@ function animate(time) {
 
   const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05;
 
-  // STRICT WALK SOUND: Only plays when WASD or Joystick is actively down
+  // STRICT WALK AUDIO CONTROL: Stop immediately when released
   if (isMoving && player.isGrounded && !player.isDead) {
     SoundFx.startWalk();
     const bobFactor = isScoped ? 0.0008 : 0.004;
-    gunPivot.position.y += Math.sin(time * 0.012) * bobFactor;
-    gunPivot.position.x += Math.cos(time * 0.006) * (bobFactor * 0.6);
+    gunPivot.position.y = Math.sin(time * 0.012) * bobFactor;
+    gunPivot.position.x = Math.cos(time * 0.006) * (bobFactor * 0.6);
   } else {
     SoundFx.stopWalk();
-    gunPivot.position.y += Math.sin(time * 0.003) * 0.0004;
+    gunPivot.position.y = Math.sin(time * 0.003) * 0.0004;
+  }
+
+  // Full-Auto Spray loop
+  if (isFiringHeld && currentWeapon === 'rifle' && !player.isDead) {
+    if (time - lastShotTime >= FIRE_RATE_DELAY) {
+      executeSingleShot();
+    }
+  }
+
+  // Anti-spray reset
+  if (!isFiringHeld && time - lastShotTime > 350) {
+    continuousShots = 0;
   }
 
   // Dash & Walk
@@ -1685,8 +1688,12 @@ function animate(time) {
     const nextX = THREE.MathUtils.clamp(camera.position.x + deltaX, -MAP_BOUND, MAP_BOUND);
     const nextZ = THREE.MathUtils.clamp(camera.position.z + deltaZ, -MAP_BOUND, MAP_BOUND);
 
-    if (!checkCollision(nextX, camera.position.z)) camera.position.x = nextX;
-    if (!checkCollision(camera.position.x, nextZ)) camera.position.z = nextZ;
+    if (!checkCollision(nextX, camera.position.z)) {
+      camera.position.x = nextX;
+    }
+    if (!checkCollision(camera.position.x, nextZ)) {
+      camera.position.z = nextZ;
+    }
   }
 
   // Gravity
@@ -1705,7 +1712,7 @@ function animate(time) {
     }
   }
 
-  // Network Sync & Remote Interpolation
+  // Smooth Interpolation of Remote Players
   if (gameMode === 'online') {
     for (let id in remotePlayers) {
       const p = remotePlayers[id];
