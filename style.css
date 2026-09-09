@@ -2,7 +2,7 @@
   box-sizing: border-box;
   user-select: none;
   -webkit-user-select: none;
-  touch-action: none; /* Prevents double-tap zoom & pinch gestures across the entire app */
+  touch-action: none;
   margin: 0;
   padding: 0;
 }
@@ -13,7 +13,7 @@ body, html {
   overflow: hidden;
   background: #0f1923;
   font-family: 'Segoe UI', Roboto, sans-serif;
-  position: fixed; /* Locks viewport from rubber-band bounce on mobile */
+  position: fixed;
 }
 
 #c {
@@ -26,7 +26,7 @@ body, html {
   touch-action: none;
 }
 
-/* LOBBY OVERLAY */
+/* LOBBY */
 #lobby {
   position: absolute;
   inset: 0;
@@ -38,6 +38,7 @@ body, html {
   justify-content: center;
   color: #ece8e1;
   padding: 20px;
+  touch-action: auto !important;
 }
 
 .title {
@@ -60,6 +61,7 @@ body, html {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  touch-action: auto !important;
 }
 
 input {
@@ -72,7 +74,8 @@ input {
   outline: none;
   text-transform: uppercase;
   letter-spacing: 1px;
-  touch-action: manipulation;
+  touch-action: auto !important;
+  pointer-events: auto !important;
 }
 
 input:focus {
@@ -91,14 +94,15 @@ button.btn {
   cursor: pointer;
   border-radius: 2px;
   transition: background 0.2s;
-  touch-action: manipulation;
+  touch-action: auto !important;
+  pointer-events: auto !important;
 }
 
 button.btn:active {
   background: #d33240;
 }
 
-/* IN-GAME HUD */
+/* HUD */
 #hud {
   position: absolute;
   inset: 0;
@@ -135,7 +139,7 @@ button.btn:active {
   display: flex;
   gap: 30px;
   align-items: center;
-  background: rgba(15, 25, 35, 0.7);
+  background: rgba(15, 25, 35, 0.8);
   padding: 8px 24px;
   border-bottom: 2px solid #ff4655;
   border-radius: 4px;
@@ -144,13 +148,37 @@ button.btn:active {
 .stat-box {
   font-family: monospace;
   color: #fff;
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   font-weight: bold;
 }
 
 .hp-val { color: #00ffcc; }
 .ammo-val { color: #ffeb3b; }
 
+/* GYRO TOGGLE BUTTON */
+.hud-pill {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  background: rgba(15, 25, 35, 0.7);
+  border: 1px solid #334454;
+  color: #ece8e1;
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 6px 12px;
+  border-radius: 14px;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: auto !important;
+}
+.hud-pill.active {
+  border-color: #00ffcc;
+  color: #00ffcc;
+  box-shadow: 0 0 8px rgba(0, 255, 204, 0.3);
+}
+
+/* KILLFEED */
 #killfeed {
   position: absolute;
   top: 20px;
@@ -163,13 +191,42 @@ button.btn:active {
 }
 
 .kf-item {
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.65);
   color: #fff;
-  padding: 4px 8px;
+  padding: 5px 10px;
   border-right: 3px solid #ff4655;
 }
 
-/* MOBILE TOUCH CONTROLS */
+/* DEATH SCREEN BANNER */
+#death-screen {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 70, 85, 0.2);
+  backdrop-filter: blur(2px);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 15;
+}
+
+.elim-title {
+  font-size: 2.8rem;
+  font-weight: 900;
+  color: #ff4655;
+  letter-spacing: 6px;
+  text-shadow: 0 0 20px rgba(255, 70, 85, 0.8);
+}
+
+.respawn-timer {
+  color: #fff;
+  font-size: 1.1rem;
+  font-family: monospace;
+  margin-top: 10px;
+  letter-spacing: 2px;
+}
+
+/* TOUCH ZONES */
 .touch-zone {
   position: absolute;
   top: 0;
@@ -192,7 +249,6 @@ button.btn:active {
   pointer-events: none;
   z-index: 25;
   transform: translate(-50%, -50%);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
 #joystick-stick {
@@ -204,7 +260,6 @@ button.btn:active {
   border-radius: 50%;
   background: #ff4655;
   transform: translate(-50%, -50%);
-  box-shadow: 0 0 8px rgba(255, 70, 85, 0.8);
 }
 
 /* ACTION BUTTONS */
@@ -228,12 +283,12 @@ button.btn:active {
   right: 25px;
   width: 75px;
   height: 75px;
-  background: rgba(255, 70, 85, 0.7);
+  background: rgba(255, 70, 85, 0.75);
   font-size: 1.1rem;
 }
 
 #btn-fire:active {
-  background: rgba(255, 70, 85, 1);
+  background: #ff4655;
 }
 
 #btn-reload {
