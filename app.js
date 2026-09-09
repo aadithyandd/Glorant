@@ -30,7 +30,207 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 /* =================================================================
-   2. THREE.JS ENGINE SETUP
+   2. PROCEDURAL SOUND SYNTHESIZER (WEB AUDIO API)
+   ================================================================= */
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new AudioContextClass();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+const SoundFx = {
+  shoot() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    // Punchy gunshot impulse
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(260, t);
+    osc.frequency.exponentialRampToValueAtTime(40, t + 0.16);
+
+    gain.gain.setValueAtTime(0.4, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.16);
+  },
+
+  knifeSlash() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(650, t);
+    osc.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.12);
+  },
+
+  knifeHit() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(30, t + 0.2);
+
+    gain.gain.setValueAtTime(0.6, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.2);
+  },
+
+  reload() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(350, t);
+    osc.frequency.setValueAtTime(480, t + 0.1);
+
+    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.25);
+  },
+
+  jump() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(160, t);
+    osc.frequency.exponentialRampToValueAtTime(320, t + 0.14);
+
+    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.14);
+  },
+
+  land() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(90, t);
+    osc.frequency.exponentialRampToValueAtTime(30, t + 0.1);
+
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.1);
+  },
+
+  dash() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(450, t);
+    osc.frequency.exponentialRampToValueAtTime(80, t + 0.2);
+
+    gain.gain.setValueAtTime(0.35, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.2);
+  },
+
+  footstep() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(75, t);
+    osc.frequency.exponentialRampToValueAtTime(25, t + 0.06);
+
+    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.06);
+  },
+
+  damage() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(50, t + 0.18);
+
+    gain.gain.setValueAtTime(0.4, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.18);
+  },
+
+  killBell() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const notes = [440, 660, 880];
+    notes.forEach((freq, idx) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t + idx * 0.08);
+
+      gain.gain.setValueAtTime(0.3, t + idx * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.08 + 0.4);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t + idx * 0.08);
+      osc.stop(t + idx * 0.08 + 0.4);
+    });
+  }
+};
+
+/* =================================================================
+   3. THREE.JS ENGINE SETUP
    ================================================================= */
 const canvas = document.querySelector('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
@@ -61,13 +261,13 @@ sunLight.shadow.mapSize.height = 1024;
 scene.add(sunLight);
 
 /* =================================================================
-   3. WEAPON RIGS (RIFLE & TACTICAL KNIFE)
+   4. WEAPON RIGS, ADS SCOPE & SMOOTH ANIMATIONS
    ================================================================= */
 const gunPivot = new THREE.Group();
 gunPivot.frustumCulled = false;
 camera.add(gunPivot);
 
-// RIFLE MODEL
+// RIFLE
 const rifleGroup = new THREE.Group();
 const gunMat = new THREE.MeshLambertMaterial({ color: 0x22262c });
 const gunBarrelMat = new THREE.MeshLambertMaterial({ color: 0x111316 });
@@ -93,7 +293,7 @@ muzzleFlash.position.set(0.2, -0.2, -1.05);
 rifleGroup.add(muzzleFlash);
 gunPivot.add(rifleGroup);
 
-// TACTICAL KNIFE MODEL
+// KNIFE
 const knifeGroup = new THREE.Group();
 const bladeMat = new THREE.MeshStandardMaterial({ color: 0xdde6ed, metalness: 0.9, roughness: 0.2 });
 const handleMat = new THREE.MeshLambertMaterial({ color: 0x1a2128 });
@@ -114,17 +314,32 @@ knifeGroup.add(handle);
 knifeGroup.visible = false;
 gunPivot.add(knifeGroup);
 
-// Weapons state
-let currentWeapon = 'rifle'; // 'rifle' or 'knife'
+// Weapon state & ADS
+let currentWeapon = 'rifle';
+let isScoped = false;
+const scopeOverlay = document.getElementById('scope-overlay');
 const slotDisplay = document.getElementById('slot-val');
 const btnSwapWeapon = document.getElementById('btn-swap-weapon');
+const crosshairEl = document.getElementById('crosshair');
+
+function toggleScope() {
+  if (currentWeapon !== 'rifle' || player.isDead) return;
+  isScoped = !isScoped;
+  scopeOverlay.classList.toggle('active', isScoped);
+  crosshairEl.style.transform = isScoped ? 'translate(-50%, -50%) scale(0.8)' : 'translate(-50%, -50%) scale(1)';
+}
 
 function setWeapon(type) {
   if (player.isReloading || player.isDead || currentWeapon === type) return;
   currentWeapon = type;
 
-  // Draw animation
+  // Unscope if switching from rifle
+  if (isScoped) toggleScope();
+
+  // Smooth draw animation
   gunPivot.position.y = -0.35;
+  SoundFx.knifeSlash();
+
   setTimeout(() => { gunPivot.position.y = 0; }, 160);
 
   if (type === 'rifle') {
@@ -151,13 +366,20 @@ btnSwapWeapon.addEventListener('click', (e) => {
   toggleWeapon();
 });
 
-// PC Mouse Wheel & 1/2 number keys
+document.getElementById('btn-scope').addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  toggleScope();
+}, { passive: false });
+
 window.addEventListener('wheel', (e) => {
   if (platformMode === 'pc') toggleWeapon();
 }, { passive: true });
 
+// Prevent context menu on right click for PC scope
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
 /* =================================================================
-   4. OPEN-WORLD ARENA & SOLID WALL COLLIDERS
+   5. OPEN-WORLD ARENA & SOLID WALL COLLIDERS
    ================================================================= */
 const colliders = [];
 const obstacleMeshes = [];
@@ -266,7 +488,7 @@ for (let i = 0; i < 90; i++) {
 }
 
 /* =================================================================
-   5. BULLET TRACERS
+   6. BULLET TRACERS
    ================================================================= */
 const tracers = [];
 function spawnTracer(startVec, endVec) {
@@ -293,7 +515,7 @@ function updateTracers(dt) {
 }
 
 /* =================================================================
-   6. ENEMY MODEL RIG & BILLBOARD NAME TAGS
+   7. ENEMY MODEL RIG & BILLBOARD NAME TAGS
    ================================================================= */
 function createNameTagSprite(name) {
   const c = document.createElement('canvas');
@@ -320,7 +542,7 @@ function createNameTagSprite(name) {
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
   sprite.scale.set(1.6, 0.45, 1);
   sprite.position.y = 2.45;
-  sprite.visible = false; // Visibility controlled by line-of-sight check
+  sprite.visible = false;
   return sprite;
 }
 
@@ -381,7 +603,7 @@ function createHighVisEnemy(name) {
 }
 
 /* =================================================================
-   7. INPUTS, DASH, SCOREBOARD & LINE-OF-SIGHT
+   8. INPUTS, DASH, SCOREBOARD & LINE-OF-SIGHT
    ================================================================= */
 let platformMode = 'mobile';
 let userSensitivity = 1.0;
@@ -403,6 +625,7 @@ const killBanner = document.getElementById('kill-banner');
 let killBannerTimeout = null;
 
 function triggerKillBanner() {
+  SoundFx.killBell();
   killBanner.classList.add('show');
   clearTimeout(killBannerTimeout);
   killBannerTimeout = setTimeout(() => {
@@ -441,6 +664,7 @@ function triggerDash() {
 
   lastDashTime = now;
   dashDuration = 0.18;
+  SoundFx.dash();
 
   const sinY = Math.sin(camYaw);
   const cosY = Math.cos(camYaw);
@@ -452,7 +676,7 @@ function triggerDash() {
   camera.fov = 82;
   camera.updateProjectionMatrix();
   setTimeout(() => {
-    camera.fov = 72;
+    camera.fov = isScoped ? 45 : 72;
     camera.updateProjectionMatrix();
   }, 220);
 }
@@ -468,7 +692,6 @@ function updateDashCooldownUI(now) {
   }
 }
 
-// Line-of-sight Raycaster to check if walls block name tags
 const losRay = new THREE.Raycaster();
 function updatePlayerVisibilities() {
   const eyePos = camera.position;
@@ -479,7 +702,6 @@ function updatePlayerVisibilities() {
       continue;
     }
 
-    // Target head level
     const targetHead = pMesh.position.clone().add(new THREE.Vector3(0, 1.6, 0));
     const distToTarget = eyePos.distanceTo(targetHead);
     const dir = targetHead.clone().sub(eyePos).normalize();
@@ -488,12 +710,10 @@ function updatePlayerVisibilities() {
     losRay.far = distToTarget;
 
     const wallIntersects = losRay.intersectObjects(obstacleMeshes, true);
-    // If a wall is closer than the enemy, hide their name tag
     pMesh.nameSprite.visible = wallIntersects.length === 0;
   }
 }
 
-// Platform Selector
 document.querySelectorAll('.plat-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -503,7 +723,6 @@ document.querySelectorAll('.plat-btn').forEach(btn => {
   });
 });
 
-// Scoreboard Modal Logic (T Key)
 const sbModal = document.getElementById('scoreboard-modal');
 const sbRows = document.getElementById('sb-rows');
 let isScoreboardOpen = false;
@@ -534,13 +753,13 @@ document.getElementById('btn-tab-toggle').addEventListener('click', (e) => {
   toggleScoreboard();
 });
 
-// PC Keyboard
 const keys = { forward: false, backward: false, left: false, right: false };
 
 function triggerJump() {
   if (player.isGrounded && !player.isDead) {
     player.vy = 8.5;
     player.isGrounded = false;
+    SoundFx.jump();
   }
 }
 
@@ -553,7 +772,6 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Number keys for weapon slots
   if (e.key === '1') setWeapon('rifle');
   if (e.key === '2') setWeapon('knife');
 
@@ -590,7 +808,8 @@ canvas.addEventListener('click', () => {
 
 window.addEventListener('mousemove', (e) => {
   if (platformMode === 'pc' && document.pointerLockElement === canvas && !player.isDead) {
-    const mouseSens = 0.0022 * userSensitivity;
+    const scopeFactor = isScoped ? 0.5 : 1.0;
+    const mouseSens = 0.0022 * userSensitivity * scopeFactor;
     camYaw -= e.movementX * mouseSens;
     camPitch -= e.movementY * mouseSens;
     camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
@@ -598,8 +817,13 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('mousedown', (e) => {
-  if (platformMode === 'pc' && document.pointerLockElement === canvas && e.button === 0) {
-    triggerFire();
+  if (platformMode === 'pc' && document.pointerLockElement === canvas) {
+    if (e.button === 0) {
+      triggerFire();
+    } else if (e.button === 2) {
+      // Right Click Scope
+      toggleScope();
+    }
   }
 });
 
@@ -660,8 +884,9 @@ window.addEventListener('touchmove', (e) => {
       const dx = t.clientX - lastLook.x;
       const dy = t.clientY - lastLook.y;
       lastLook = { x: t.clientX, y: t.clientY };
-      camYaw -= dx * 0.0038 * userSensitivity;
-      camPitch -= dy * 0.0038 * userSensitivity;
+      const scopeFactor = isScoped ? 0.5 : 1.0;
+      camYaw -= dx * 0.0038 * userSensitivity * scopeFactor;
+      camPitch -= dy * 0.0038 * userSensitivity * scopeFactor;
       camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
     }
   }
@@ -692,7 +917,7 @@ document.getElementById('btn-dash').addEventListener('touchstart', (e) => {
   triggerDash();
 }, { passive: false });
 
-// Mobile Gyroscope
+// Gyroscope
 let gyroActive = false;
 let lastGamma = null;
 let lastBeta = null;
@@ -722,8 +947,9 @@ window.addEventListener('deviceorientation', (e) => {
     const dg = e.gamma - lastGamma;
     const db = e.beta - lastBeta;
     if (Math.abs(dg) < 15 && Math.abs(db) < 15) {
-      camYaw -= (dg * Math.PI / 180) * 0.45 * userSensitivity;
-      camPitch -= (db * Math.PI / 180) * 0.45 * userSensitivity;
+      const scopeFactor = isScoped ? 0.5 : 1.0;
+      camYaw -= (dg * Math.PI / 180) * 0.45 * userSensitivity * scopeFactor;
+      camPitch -= (db * Math.PI / 180) * 0.45 * userSensitivity * scopeFactor;
       camPitch = Math.max(-1.45, Math.min(1.45, camPitch));
     }
   }
@@ -744,7 +970,7 @@ function checkCollision(targetX, targetZ) {
 }
 
 /* =================================================================
-   8. ATTACK SYSTEM (NO WALLBANG HITSCAN & MELEE)
+   9. ATTACK SYSTEM (KNIFE DAMAGE & RIFLE HITSCAN)
    ================================================================= */
 const vignetteEl = document.getElementById('damage-vignette');
 const raycaster = new THREE.Raycaster();
@@ -752,6 +978,7 @@ const ammoDisplay = document.getElementById('ammo-val');
 const hpDisplay = document.getElementById('hp-val');
 
 function triggerDamageScreen() {
+  SoundFx.damage();
   vignetteEl.style.background = 'rgba(255, 20, 40, 0.25)';
   vignetteEl.style.boxShadow = 'inset 0 0 85px 30px rgba(255, 30, 45, 0.85)';
   setTimeout(() => {
@@ -765,23 +992,28 @@ function triggerFire() {
   if (player.isReloading || player.isDead) return;
 
   if (currentWeapon === 'knife') {
-    // KNIFE MELEE ATTACK
-    knifeGroup.rotation.y = -Math.PI / 3;
-    gunPivot.position.z += 0.08;
+    // KNIFE ATTACK (85 DAMAGE)
+    SoundFx.knifeSlash();
+
+    // Smooth slash animation
+    knifeGroup.rotation.y = -Math.PI / 2.5;
+    knifeGroup.rotation.x = Math.PI / 6;
+    gunPivot.position.z += 0.12;
+
     setTimeout(() => {
       knifeGroup.rotation.y = 0;
+      knifeGroup.rotation.x = 0;
       gunPivot.position.z = 0;
     }, 180);
 
-    // Knife range check (up to 3.2m in front)
     raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     const activeTargets = Object.values(remotePlayers).filter(m => !m.isDead);
     const hits = raycaster.intersectObjects(activeTargets, true);
 
-    if (hits.length > 0 && hits[0].distance <= 3.2) {
-      // Check for wall obstruction between knife and target
+    if (hits.length > 0 && hits[0].distance <= 3.5) {
       const wallHits = raycaster.intersectObjects(obstacleMeshes, true);
       if (wallHits.length === 0 || wallHits[0].distance > hits[0].distance) {
+        SoundFx.knifeHit();
         const hitObj = hits[0].object;
         let targetId = null;
         for (let id in remotePlayers) {
@@ -789,7 +1021,7 @@ function triggerFire() {
         }
         if (targetId && currentRoom) {
           const damageRef = ref(db, `rooms/${currentRoom}/players/${targetId}/damage`);
-          push(damageRef, { fromId: player.id, fromName: player.name, amount: 65, time: Date.now() });
+          push(damageRef, { fromId: player.id, fromName: player.name, amount: 85, time: Date.now() });
         }
       }
     }
@@ -804,9 +1036,12 @@ function triggerFire() {
 
   player.ammo--;
   ammoDisplay.innerText = `${player.ammo}/${player.maxAmmo}`;
+  SoundFx.shoot();
 
-  player.recoilPitch += 0.022;
-  player.recoilYaw += (Math.random() - 0.5) * 0.014;
+  // Scope reduces recoil
+  const recoilFactor = isScoped ? 0.45 : 1.0;
+  player.recoilPitch += 0.022 * recoilFactor;
+  player.recoilYaw += (Math.random() - 0.5) * 0.014 * recoilFactor;
   gunPivot.position.z += 0.04;
 
   muzzleFlash.material.visible = true;
@@ -817,7 +1052,6 @@ function triggerFire() {
 
   raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
-  // Check both opponents and walls (NO WALLBANG)
   const activeTargets = Object.values(remotePlayers).filter(m => !m.isDead);
   const playerHits = raycaster.intersectObjects(activeTargets, true);
   const wallHits = raycaster.intersectObjects(obstacleMeshes, true);
@@ -826,7 +1060,6 @@ function triggerFire() {
   let firstWallDist = wallHits.length > 0 ? wallHits[0].distance : Infinity;
   let firstPlayerDist = playerHits.length > 0 ? playerHits[0].distance : Infinity;
 
-  // If a wall is in front of the player, hit the wall and stop (no damage)
   if (firstWallDist < firstPlayerDist) {
     endPoint.copy(wallHits[0].point);
   } else if (playerHits.length > 0) {
@@ -849,8 +1082,12 @@ function triggerFire() {
 
 function triggerReload() {
   if (currentWeapon === 'knife' || player.isReloading || player.ammo === player.maxAmmo || player.isDead) return;
+  if (isScoped) toggleScope();
+
   player.isReloading = true;
   ammoDisplay.innerText = `RELOAD...`;
+  SoundFx.reload();
+
   gunPivot.position.y = -0.22;
   setTimeout(() => {
     player.ammo = player.maxAmmo;
@@ -871,7 +1108,7 @@ document.getElementById('btn-reload').addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 /* =================================================================
-   9. MULTIPLAYER ROOMS, SCORES & KILL FEED
+   10. MULTIPLAYER ROOMS, STATS & SCORES
    ================================================================= */
 const deathScreen = document.getElementById('death-screen');
 const respawnText = document.getElementById('respawn-text');
@@ -881,6 +1118,8 @@ function die(killerName, killerId) {
   player.deaths++;
   player.isDead = true;
   hpDisplay.innerText = 0;
+  if (isScoped) toggleScope();
+
   triggerDamageScreen();
   deathScreen.style.display = 'flex';
 
@@ -1001,7 +1240,6 @@ async function joinRoom(roomId, name) {
     const list = snap.val() || {};
     allLobbyScores = list;
 
-    // Trigger Kill Banner if our kills incremented
     if (list[player.id]) {
       const newKills = list[player.id].kills || 0;
       if (newKills > player.kills) triggerKillBanner();
@@ -1071,6 +1309,7 @@ function addKillFeed(msg) {
 
 function handleJoin(e) {
   if (e) e.preventDefault();
+  ensureAudio();
   const name = document.getElementById('player-name').value.trim() || 'Agent';
   const room = document.getElementById('room-input').value.trim().toUpperCase() || 'MAIN';
   joinRoom(room, name);
@@ -1080,10 +1319,11 @@ document.getElementById('btn-join').addEventListener('touchend', handleJoin, { p
 document.getElementById('btn-join').addEventListener('click', handleJoin);
 
 /* =================================================================
-   10. MAIN ENGINE LOOP & PHYSICS
+   11. MAIN ENGINE LOOP & SMOOTH ANIMATIONS
    ================================================================= */
 let lastTime = performance.now();
 let lastNetworkSync = 0;
+let footstepTimer = 0;
 const moveSpeed = 8.5;
 const GRAVITY = 24.0;
 
@@ -1097,9 +1337,20 @@ function animate(time) {
   updateDashCooldownUI(time);
   updatePlayerVisibilities();
 
-  // Recoil decay
+  // Smooth ADS Zoom
+  const targetFov = isScoped ? 45 : 72;
+  camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.18);
+  camera.updateProjectionMatrix();
+
+  // Recoil recovery
   player.recoilPitch *= 0.85;
   player.recoilYaw *= 0.85;
+
+  // Aim alignment: Center weapon when scoped, offset right when hipfiring
+  const targetGunX = isScoped ? 0.0 : 0.0;
+  const targetGunY = isScoped ? 0.06 : 0.0;
+  gunPivot.position.x = THREE.MathUtils.lerp(gunPivot.position.x, targetGunX, 0.2);
+  gunPivot.position.y = THREE.MathUtils.lerp(gunPivot.position.y, targetGunY, 0.2);
   gunPivot.position.z = THREE.MathUtils.lerp(gunPivot.position.z, 0, 0.2);
 
   camera.rotation.y = camYaw + player.recoilYaw;
@@ -1119,6 +1370,25 @@ function animate(time) {
     inputZ = joyInput.y;
   }
 
+  const isMoving = Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05;
+
+  // Smooth Weapon Bobbing & Footsteps
+  if (isMoving && player.isGrounded && !player.isDead) {
+    const bobFactor = isScoped ? 0.001 : 0.005;
+    gunPivot.position.y += Math.sin(time * 0.012) * bobFactor;
+    gunPivot.position.x += Math.cos(time * 0.006) * (bobFactor * 0.7);
+
+    footstepTimer += dt;
+    if (footstepTimer > 0.38) {
+      SoundFx.footstep();
+      footstepTimer = 0;
+    }
+  } else {
+    // Subtle idle breathing
+    gunPivot.position.y += Math.sin(time * 0.003) * 0.0004;
+    footstepTimer = 0.3;
+  }
+
   // Dash or Walk
   if (dashDuration > 0) {
     dashDuration -= dt;
@@ -1127,7 +1397,7 @@ function animate(time) {
 
     if (!checkCollision(dX, camera.position.z)) camera.position.x = dX;
     if (!checkCollision(camera.position.x, dZ)) camera.position.z = dZ;
-  } else if (!player.isDead && (Math.abs(inputX) > 0.05 || Math.abs(inputZ) > 0.05)) {
+  } else if (!player.isDead && isMoving) {
     const sinY = Math.sin(camYaw);
     const cosY = Math.cos(camYaw);
 
@@ -1136,8 +1406,9 @@ function animate(time) {
     const strafeX = cosY * inputX;
     const strafeZ = -sinY * inputX;
 
-    const deltaX = (fwdX + strafeX) * moveSpeed * dt;
-    const deltaZ = (fwdZ + strafeZ) * moveSpeed * dt;
+    const currentSpeed = isScoped ? moveSpeed * 0.65 : moveSpeed;
+    const deltaX = (fwdX + strafeX) * currentSpeed * dt;
+    const deltaZ = (fwdZ + strafeZ) * currentSpeed * dt;
 
     const nextX = THREE.MathUtils.clamp(camera.position.x + deltaX, -MAP_BOUND, MAP_BOUND);
     const nextZ = THREE.MathUtils.clamp(camera.position.z + deltaZ, -MAP_BOUND, MAP_BOUND);
@@ -1152,6 +1423,7 @@ function animate(time) {
 
   // Gravity
   if (!player.isDead) {
+    const wasInAir = !player.isGrounded;
     player.vy -= GRAVITY * dt;
     camera.position.y += player.vy * dt;
 
@@ -1159,12 +1431,15 @@ function animate(time) {
       camera.position.y = EYE_HEIGHT;
       player.vy = 0;
       player.isGrounded = true;
+
+      // Landing sound effect
+      if (wasInAir) SoundFx.land();
     } else {
       player.isGrounded = false;
     }
   }
 
-  // Network Sync (20 updates/sec)
+  // Network Sync
   if (currentRoom && time - lastNetworkSync > 50) {
     lastNetworkSync = time;
     update(ref(db, `rooms/${currentRoom}/players/${player.id}`), {
