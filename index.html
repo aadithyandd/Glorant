@@ -10,94 +10,9 @@
 </head>
 <body>
 
-  <!-- Top Authenticated User Indicator -->
-  <div id="user-bar" class="user-status-bar" style="display: none;">
-    <span>🟢 Agent: <strong id="display-username"></strong></span>
-  </div>
-
-  <!-- SCREEN 1: First Login / Username Sign In -->
-  <div id="screen-signin" class="app-screen active">
-    <div class="glossy-card">
-      <div class="title-glow">V-STRIKE</div>
-      <div class="subtitle">ENTER OPERATIVE CREDENTIALS</div>
-      <input type="text" id="username-input" class="glossy-input" placeholder="Enter Username..." maxlength="12" autocomplete="off" />
-      <button id="btn-signin" class="glossy-btn">SIGN IN & CONTINUE</button>
-    </div>
-  </div>
-
-  <!-- SCREEN 2: Main Screen (Play & Information + Video box mapping your drawing) -->
-  <div id="screen-main" class="app-screen">
-    <div class="dashboard-grid">
-      <div class="glossy-card" style="max-width: 100%;">
-        <div class="title-glow">V-STRIKE 3D</div>
-        <div class="subtitle">TACTICAL BROWSER MULTIPLAYER</div>
-        
-        <div class="video-preview-box"></div>
-        
-        <div style="display: flex; gap: 15px; margin-top: 10px;">
-          <button id="btn-goto-device" class="glossy-btn" style="flex: 2;">PLAY GAME</button>
-          <button id="btn-signout" class="glossy-btn secondary" style="flex: 1;">SWITCH USER</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- SCREEN 3: Choose Your Device (PC or Mobile) -->
-  <div id="screen-device" class="app-screen">
-    <div class="glossy-card">
-      <div class="title-glow" style="font-size: 1.8rem;">CHOOSE DEVICE</div>
-      <div class="subtitle">OPTIMIZE CONTROLS & RENDERING</div>
-      
-      <div class="device-options">
-        <div class="device-card" data-device="mobile">
-          <div class="device-icon">📱</div>
-          <div style="font-weight: bold; color: #fff;">MOBILE DEVICE</div>
-        </div>
-        <div class="device-card" data-device="pc">
-          <div class="device-icon">💻</div>
-          <div style="font-weight: bold; color: #fff;">PC WORKSTATION</div>
-        </div>
-      </div>
-
-      <div style="display: flex; gap: 10px; margin-top: 10px;">
-        <button id="btn-back-main" class="glossy-btn secondary" style="flex: 1;">BACK</button>
-        <button id="btn-goto-code" class="glossy-btn" style="flex: 2;" disabled>NEXT</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- SCREEN 4: Enter Room Code / Create Room -->
-  <div id="screen-code" class="app-screen">
-    <div class="glossy-card">
-      <div class="title-glow" style="font-size: 1.8rem;">ROOM ACCESS</div>
-      <div class="subtitle">ENTER CODE OR CREATE NEW ROOM</div>
-      
-      <input type="text" id="room-code-input" class="glossy-input" placeholder="ROOM CODE (E.G. 1300)" maxlength="6" style="text-align: center; letter-spacing: 2px;" />
-      
-      <div style="display: flex; gap: 10px;">
-        <button id="btn-back-device" class="glossy-btn secondary" style="flex: 1;">BACK</button>
-        <button id="btn-launch-game" class="glossy-btn" style="flex: 2;">ENTER MATCH</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================================================================= -->
-  <!-- GAME ENGINE ELEMENTS (Required by app.js to prevent null errors)   -->
-  <!-- ================================================================= -->
   <canvas id="c"></canvas>
   <div id="damage-vignette"></div>
   <div id="scope-overlay"></div>
-
-  <!-- Hidden legacy compatibility elements for app.js references -->
-  <div id="lobby" style="display: none;">
-    <input type="text" id="player-name" />
-    <input type="text" id="room-input" />
-    <button id="btn-join"></button>
-    <div class="platform-toggle">
-      <button class="mode-btn active" data-mode="online"></button>
-      <button class="plat-btn active" data-plat="mobile"></button>
-    </div>
-  </div>
 
   <!-- Valorant Kill Banner -->
   <div id="kill-banner">
@@ -108,7 +23,7 @@
   <!-- Scoreboard Overlay (Press T) -->
   <div id="scoreboard-modal">
     <div class="sb-card">
-      <div class="sb-header">MATCH LEADERBOARD (PRESS T OR TAP ANYWHERE TO CLOSE)</div>
+      <div class="sb-header">MATCH LEADERBOARD (PRESS T TO CLOSE)</div>
       <table id="sb-table">
         <thead>
           <tr>
@@ -154,6 +69,27 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Lobby Overlay -->
+  <div id="lobby">
+    <div class="title">V-STRIKE</div>
+    <div class="card">
+      <input type="text" id="player-name" placeholder="Agent Name" maxlength="10" />
+      <input type="text" id="room-input" placeholder="Room Code (e.g. BIND)" maxlength="6" />
+      
+      <div class="platform-toggle">
+        <button type="button" class="mode-btn active" data-mode="online">ONLINE MULTIPLAYER</button>
+        <button type="button" class="mode-btn" data-mode="offline">OFFLINE (BOTS)</button>
+      </div>
+
+      <div class="platform-toggle">
+        <button type="button" class="plat-btn active" data-plat="mobile">MOBILE</button>
+        <button type="button" class="plat-btn" data-plat="pc">PC (WASD)</button>
+      </div>
+
+      <button class="btn" id="btn-join">Start Game</button>
     </div>
   </div>
 
@@ -205,103 +141,6 @@
     <button id="btn-dash" class="action-btn">DASH</button>
   </div>
 
-  <!-- Scripts -->
-  <script src="storage.js"></script>
-  <script type="module">
-    import * as GameEngine from './app.js';
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const screens = {
-        signin: document.getElementById('screen-signin'),
-        main: document.getElementById('screen-main'),
-        device: document.getElementById('screen-device'),
-        code: document.getElementById('screen-code')
-      };
-
-      const userBar = document.getElementById('user-bar');
-      const displayUsername = document.getElementById('display-username');
-      
-      let selectedDevice = 'mobile'; // Default selection
-
-      function switchScreen(targetName) {
-        Object.values(screens).forEach(screen => screen.classList.remove('active'));
-        screens[targetName].classList.add('active');
-
-        const currentUsername = StorageManager.getUsername();
-        if (currentUsername && targetName !== 'signin') {
-          userBar.style.display = 'flex';
-          displayUsername.innerText = currentUsername;
-        } else {
-          userBar.style.display = 'none';
-        }
-      }
-
-      // Boot check
-      if (!StorageManager.getUsername()) {
-        switchScreen('signin');
-      } else {
-        switchScreen('main');
-      }
-
-      // 1. Sign In
-      document.getElementById('btn-signin').addEventListener('click', () => {
-        const val = document.getElementById('username-input').value;
-        if (StorageManager.setUsername(val)) {
-          switchScreen('main');
-        } else {
-          alert('Please provide a valid username.');
-        }
-      });
-
-      document.getElementById('btn-signout').addEventListener('click', () => {
-        StorageManager.clearUsername();
-        document.getElementById('username-input').value = '';
-        switchScreen('signin');
-      });
-
-      // 2. Main to Device
-      document.getElementById('btn-goto-device').addEventListener('click', () => {
-        switchScreen('device');
-      });
-
-      // 3. Device Selection
-      document.querySelectorAll('.device-card').forEach(card => {
-        card.addEventListener('click', () => {
-          document.querySelectorAll('.device-card').forEach(c => c.classList.remove('selected'));
-          card.classList.add('selected');
-          selectedDevice = card.getAttribute('data-device');
-          document.getElementById('btn-goto-code').removeAttribute('disabled');
-        });
-      });
-
-      document.getElementById('btn-back-main').addEventListener('click', () => switchScreen('main'));
-      document.getElementById('btn-goto-code').addEventListener('click', () => {
-        if (selectedDevice) switchScreen('code');
-      });
-
-      document.getElementById('btn-back-device').addEventListener('click', () => switchScreen('device'));
-
-      // 4. Launch Match Bridge
-      document.getElementById('btn-launch-game').addEventListener('click', () => {
-        const roomCode = document.getElementById('room-code-input').value.trim().toUpperCase() || 'MAIN';
-        const username = StorageManager.getUsername();
-
-        // Hide UI screens & user status bar
-        Object.values(screens).forEach(screen => screen.style.display = 'none');
-        userBar.style.display = 'none';
-
-        // Populate hidden legacy inputs so app.js reads them smoothly
-        document.getElementById('player-name').value = username;
-        document.getElementById('room-input').value = roomCode;
-
-        // Set platform mode variable directly in window/app context
-        window.platformMode = selectedDevice;
-        
-        // Trigger simulation join
-        const joinBtn = document.getElementById('btn-join');
-        if (joinBtn) joinBtn.click();
-      });
-    });
-  </script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
