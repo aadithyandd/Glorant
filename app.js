@@ -2010,3 +2010,12 @@ window.addEventListener('resize', () => {
 });
 
 animate(performance.now());
+// Add this export function wrapper at the very bottom or top of your app.js
+export function launchGameEngine(config) {
+  // Set global variables based on the 4-step UI selections
+  player.name = config.username || 'Agent';
+  platformMode = config.platform || 'mobile'; // 'pc' or 'mobile'
+  
+  // Connect directly to room using user choices
+  joinRoom(config.room || 'MAIN', player.name);
+}
