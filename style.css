@@ -5,6 +5,196 @@
   user-select: none;
   -webkit-user-select: none;
 }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #1b2838 0%, #0b1118 100%);
+  font-family: monospace, sans-serif;
+  color: #fff;
+}
+
+/* Screen container structure */
+.app-screen {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.app-screen.active {
+  display: flex;
+  opacity: 1;
+}
+
+/* Glossy Metallic Cards / Containers */
+.glossy-card {
+  background: linear-gradient(135deg, rgba(30, 42, 56, 0.85) 0%, rgba(15, 22, 30, 0.95) 100%);
+  border: 1px solid rgba(0, 255, 204, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 1px 2px 0 rgba(255, 255, 204, 0.2);
+  border-radius: 14px;
+  padding: 35px;
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  backdrop-filter: blur(8px);
+}
+
+.title-glow {
+  font-size: 2.2rem;
+  font-weight: bold;
+  color: #00ffcc;
+  text-align: center;
+  letter-spacing: 3px;
+  text-shadow: 0 0 15px rgba(0, 255, 204, 0.5);
+  margin-bottom: 5px;
+}
+
+.subtitle {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  text-align: center;
+  margin-top: -10px;
+  margin-bottom: 10px;
+}
+
+/* Input Fields */
+.glossy-input {
+  background: rgba(10, 15, 22, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 14px 16px;
+  color: #fff;
+  font-size: 1.1rem;
+  font-family: monospace;
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.glossy-input:focus {
+  border-color: #00ffcc;
+  box-shadow: 0 0 10px rgba(0, 255, 204, 0.3);
+}
+
+/* Glossy Action Buttons */
+.glossy-btn {
+  background: linear-gradient(180deg, #00ffcc 0%, #00b38f 100%);
+  color: #0b1118;
+  border: none;
+  padding: 14px;
+  font-size: 1.1rem;
+  font-family: monospace;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  box-shadow: 0 4px 15px rgba(0, 255, 204, 0.3);
+  transition: transform 0.1s ease, filter 0.2s ease;
+}
+
+.glossy-btn:hover {
+  filter: brightness(1.1);
+}
+
+.glossy-btn:active {
+  transform: scale(0.98);
+}
+
+.glossy-btn.secondary {
+  background: linear-gradient(180deg, #334155 100%, #1e293b 100%);
+  color: #cbd5e1;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Screen 1 Layout (Play / Info / Video Mock) */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  width: 100%;
+  max-width: 700px;
+}
+
+.video-preview-box {
+  background: #05080c;
+  border: 1px solid rgba(0, 255, 204, 0.2);
+  border-radius: 10px;
+  height: 180px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #475569;
+  font-style: italic;
+  position: relative;
+  overflow: hidden;
+}
+
+.video-preview-box::after {
+  content: '▶ PREVIEW FEED';
+  position: absolute;
+  color: rgba(0, 255, 204, 0.4);
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+/* Screen 2 Layout (Device Options) */
+.device-options {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+.device-card {
+  flex: 1;
+  background: rgba(15, 22, 30, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 25px 15px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.device-card:hover, .device-card.selected {
+  border-color: #00ffcc;
+  background: rgba(0, 255, 204, 0.08);
+  box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+}
+
+.device-icon {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+/* Top user status bar */
+.user-status-bar {
+  position: absolute;
+  top: 20px; right: 25px;
+  background: rgba(17, 24, 34, 0.85);
+  border: 1px solid rgba(0, 255, 204, 0.3);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: #00ffcc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 body, html {
   width: 100%;
